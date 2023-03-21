@@ -1,55 +1,81 @@
+import os
 import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW
+from transformers import AutoTokenizer
 
 from data_loader import *
-from data_processor import AGDataset, QGDataset
-from model import AnswerGenerationModel, QuestionGenerationModel
-from utils import *
+from .data_processor import AGDataset, QGDataset
+from utils import evaluate_metrics
 
 
-class AGTrainer:
+class AGQGTrainer:
     def __init__(self,
                  lm,
+                 generative_lm,
+                 lm_name,
                  tokenizer,
                  lambda_p,
                  batch_size,
                  epochs,
                  lr,
                  vocab_size,
-                 dataset
+                 embed_dim,
+                 num_heads,
+                 dataset,
+                 max_encoder_len=128,
+                 max_decoder_len=64,
+                 saved_model=None,
+                 generation_task='answer',
                  ):
-        self.lm = lm
-        self.tokenizer = tokenizer
+        self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.generation_task = generation_task
+        self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
+        # print(self.benchmark_data)
+
+        self.lm_name = lm_name
 
         self.lambda_p = lambda_p
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr = lr
         self.vocab_size = vocab_size
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.dataset = dataset.lower()
+        self.saved_model = saved_model
 
-        self.model = AnswerGenerationModel(self.lm)
+        self.max_encoder_len = max_encoder_len
+        self.max_decoder_len = max_decoder_len
+
+        self.model = generative_lm.from_pretrained(lm_name)
         self.optimizer = AdamW(params=self.model.parameters(), lr=self.lr)
+        if self.saved_model is not None:
+            self.load_model_from_ckpt()
+        self.model.to(self.device)
 
         self.load_data()
 
+    def load_model_from_ckpt(self):
+        ckpt = torch.load(self.saved_model)
+        self.model.load_state_dict(ckpt['state_dict'])
+        self.optimizer.load_state_dict(ckpt['state_dict'])
+
     def load_data(self):
-        if 'squad' in self.dataset:
-            data = SQuADLoader().get_data()
+        if 'processed_squad' in self.dataset:
+            train_data, val_data = SQuADLoader().get_data()
         elif 'race' in self.dataset:
-            data = RACELoader().get_data()
+            train_data, val_data = RACELoader().get_data()
         else:
-            data = None
-        train_data, val_data, test_data = split_dataset(data)
-        train_dataset = AGDataset(train_data, self.tokenizer)
-        val_dataset = AGDataset(val_data, self.tokenizer)
-        test_dataset = AGDataset(test_data, self.tokenizer)
+            train_data, val_data = None, None
+        if self.generation_task == 'answer':
+            train_dataset = AGDataset(train_data, self.tokenizer)
+            val_dataset = AGDataset(val_data, self.tokenizer)
+        else:
+            train_dataset = QGDataset(train_data, self.tokenizer)
+            val_dataset = QGDataset(val_data, self.tokenizer)
 
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.batch_size, shuffle=True)
-        self.test_dataloader = DataLoader(dataset=test_dataset, batch_size=self.batch_size, shuffle=True)
 
     def train(self):
         self.model.train()
@@ -57,122 +83,91 @@ class AGTrainer:
             for step, data in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
                 batch = [d.to(self.device) for d in data]
-                p_input_ids, p_attention_mask, a_input_ids = batch[4:]
-                outputs = self.model(p_input_ids, p_attention_mask, a_input_ids)
-
+                input_ids, attention_mask, label_ids = batch
+                outputs = self.model(input_ids=input_ids,
+                                     attention_mask=attention_mask,
+                                     labels=label_ids,)
                 loss = outputs[0]
                 loss.backward()
                 self.optimizer.step()
 
                 if step % 10 == 0:
                     print("Epoch: {}  Step:{}  Loss:{}".format(epoch, step, loss.item()))
+            path = './saved_models/pipeline/{lm_name}'.format(generation_task=self.generation_task, lm_name=self.lm_name)
+            folder = os.path.exists(path)
+            if not folder:
+                print('creat path')
+                os.makedirs(path)
+            torch.save({'state_dict': self.model, 'optimizer': self.optimizer},
+                       '{path}/{generation_task}_{epoch}.pth.tar'.format(
+                           path=path, generation_task=self.generation_task, epoch=epoch))
+            self.validate()
+            print(self.infer())
 
     def validate(self):
         self.model.eval()
         with torch.no_grad():
             for step, data in enumerate(self.val_dataloader):
                 batch = [d.to(self.device) for d in data]
-                p_input_ids, p_attention_mask, a_input_ids = batch[4:]
-                outputs = self.model(p_input_ids, p_attention_mask, a_input_ids)
+                input_ids, attention_mask, label_ids = batch
+                outputs = self.model(input_ids=input_ids,
+                                     attention_mask=attention_mask,
+                                     labels=label_ids,)
                 loss = outputs[0]
                 if step % 10 == 0:
-                    print(" Step:{}  Loss:{}".format(step, loss.item()))
+                    print("Validation Step:{}  Loss:{}".format(step, loss.item()))
 
-    def infer(self, p):
+    def infer(self, save_predictions=False):
         self.model.eval()
-        decoded_outputs = []
-        p_encode = self.tokenizer.encode_plus(p,
-                                              return_tensors="pt",
-                                              padding="max_length",
-                                              truncation=True,
-                                              max_length=self.max_encoder_len)
+        predictions = []
+        references = []
+        for passage, answer, question in zip(self.benchmark_data['passage'], self.benchmark_data['answer'], self.benchmark_data['question']):
+            if self.generation_task == 'answer':
+                inputs = passage
+                references.append(answer)
+            else:
+                inputs = passage + ' [SEP] ' + answer
+                references.append(question)
+            encode_inputs = self.tokenizer.encode_plus(inputs,
+                                                       return_tensors="pt",
+                                                       padding='max_length',
+                                                       truncation=True,
+                                                       max_length=self.max_encoder_len)
+            with torch.no_grad():
+                input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
+                input_ids = input_ids.to(self.device)
+                outputs = self.model.generate(input_ids)
+                decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
+                predictions.append(decoded_outputs)
+        return evaluate_metrics(predictions, references)
+
+
+class PipelineGenerator:
+    def __init__(self, lm, lm_name, tokenizer, saved_ag_model, saved_qg_model, max_encoder_len):
+        self.ag_model = lm.from_pretrained(saved_ag_model)
+        self.qg_model = lm.from_pretrained(saved_qg_model)
+        self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.max_encoder_len = max_encoder_len
+
+    def generate(self, p):
         with torch.no_grad():
+            p_encode = self.tokenizer.encode_plus(p,
+                                                  return_tensors="pt",
+                                                  padding="max_length",
+                                                  truncation=True,
+                                                  max_length=self.max_encoder_len)
             p_input_ids, p_attention_mask = p_encode['input_ids'][0], p_encode['attention_mask'][0]
-            outputs = self.model.generate(p_input_ids, p_attention_mask)
+            g_a_encode = self.ag_model.generate(p_input_ids, p_attention_mask)
+            g_a = self.tokenizer.decode(g_a_encode.squeeze().tolist(), skip_special_tokens=True)
 
-            decoded = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
-            decoded_outputs.append(decoded)
+            pa = p + ' [SEP] ' + g_a
+            pa_encode = self.tokenizer.encode_plus(pa,
+                                                   return_tensors="pt",
+                                                   padding="max_length",
+                                                   truncation=True,
+                                                   max_length=self.max_encoder_len)
+            pa_input_ids, pa_attention_mask = pa_encode['input_ids'][0], pa_encode['attention_mask'][0]
+            g_q_encode = self.qg_model.generate(pa_input_ids, pa_attention_mask)
+            g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=True)
 
-        return decoded_outputs
-
-
-class QGTrainer:
-    def __init__(self,
-                 lm,
-                 tokenizer,
-                 lambda_p,
-                 batch_size,
-                 epochs,
-                 lr,
-                 vocab_size,
-                 dataset
-                 ):
-        self.lm = lm
-        self.tokenizer = tokenizer
-
-        self.lambda_p = lambda_p
-        self.batch_size = batch_size
-        self.epochs = epochs
-        self.lr = lr
-        self.vocab_size = vocab_size
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.dataset = dataset.lower()
-
-        self.model = QuestionGenerationModel(self.lm)
-        self.optimizer = AdamW(params=self.model.parameters(), lr=self.lr)
-
-        self.load_data()
-
-    def load_data(self):
-        if 'squad' in self.dataset:
-            data = SQuADLoader().get_data()
-        elif 'race' in self.dataset:
-            data = RACELoader().get_data()
-        else:
-            data = None
-        train_data, val_data, test_data = split_dataset(data)
-        train_dataset = QGDataset(train_data, self.tokenizer)
-        val_dataset = QGDataset(val_data, self.tokenizer)
-        test_dataset = QGDataset(test_data, self.tokenizer)
-
-        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
-        self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.batch_size, shuffle=True)
-        self.test_dataloader = DataLoader(dataset=test_dataset, batch_size=self.batch_size, shuffle=True)
-
-    def train(self):
-        self.model.train()
-        for epoch in range(self.epochs):
-            for step, data in enumerate(self.train_dataloader):
-                self.optimizer.zero_grad()
-                batch = [d.to(self.device) for d in data]
-                p_input_ids, p_attention_mask, a_input_ids = batch[4:]
-                outputs = self.model(p_input_ids, p_attention_mask, a_input_ids)
-
-                loss = outputs[0]
-                loss.backward()
-                self.optimizer.step()
-
-                if step % 10 == 0:
-                    print("Epoch: {}  Step:{}  Loss:{}".format(epoch, step, loss.item()))
-
-    def validate(self):
-        self.model.eval()
-        with torch.no_grad():
-            for step, data in enumerate(self.val_dataloader):
-                batch = [d.to(self.device) for d in data]
-                p_input_ids, p_attention_mask, a_input_ids = batch[4:]
-                outputs = self.model(p_input_ids, p_attention_mask, a_input_ids)
-                loss = outputs[0]
-                if step % 10 == 0:
-                    print(" Step:{}  Loss:{}".format(step, loss.item()))
-
-    def infer(self, p, a):
-        self.model.eval()
-        pa_decode = p + ' [SEP] ' + a
-        with torch.no_grad():
-            p_input_ids, p_attention_mask = pa_decode['input_ids'][0], pa_decode['attention_mask'][0]
-            outputs = self.model.generate(p_input_ids, p_attention_mask)
-
-            decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
-
-        return decoded_outputs
+            return g_a, g_q

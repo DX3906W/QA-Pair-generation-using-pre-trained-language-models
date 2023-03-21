@@ -1,1 +1,7 @@
 distractor/dataset/*
+saved_models/*
+benchmark_qa/*
+benchmark_dataset/*
+processed_squad/*
+*.pyc
+*.json

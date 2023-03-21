@@ -17,7 +17,7 @@ class AGDataset(Dataset):
         return len(self.datas)
 
     def __getitem__(self, index):
-        p, q, a = self.datas[index]
+        p, q, a, _ = self.datas[index]
         p_inputs = self.tokenizer.encode_plus(p,
                                               return_tensors="pt",
                                               padding="max_length",
@@ -27,8 +27,7 @@ class AGDataset(Dataset):
                                               return_tensors="pt",
                                               padding="max_length",
                                               truncation=True,
-                                              max_length=self.max_encoder_len
-                                              )
+                                              max_length=self.max_encoder_len)
 
         p_input_ids = p_inputs["input_ids"][0]
         p_attention_mask = p_inputs["attention_mask"][0]
@@ -53,7 +52,7 @@ class QGDataset(Dataset):
         return len(self.datas)
 
     def __getitem__(self, index):
-        p, q, a = self.datas[index]
+        p, q, a, _ = self.datas[index]
         p_a = p + ' [SEP] ' + a
         pa_inputs = self.tokenizer.encode_plus(p_a,
                                                return_tensors="pt",
