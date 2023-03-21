@@ -11,7 +11,7 @@ class AGDataset(Dataset):
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.datas = datas
+        self.datas = datas[:4]
 
     def __len__(self):
         return len(self.datas)
@@ -27,8 +27,7 @@ class AGDataset(Dataset):
                                               return_tensors="pt",
                                               padding="max_length",
                                               truncation=True,
-                                              max_length=self.max_encoder_len
-                                              )
+                                              max_length=self.max_encoder_len)
 
         p_input_ids = p_inputs["input_ids"][0]
         p_attention_mask = p_inputs["attention_mask"][0]
@@ -47,7 +46,7 @@ class QGDataset(Dataset):
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.datas = datas
+        self.datas = datas[:10]
 
     def __len__(self):
         return len(self.datas)

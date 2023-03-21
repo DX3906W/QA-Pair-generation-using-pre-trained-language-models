@@ -1,1 +1,5 @@
 distractor/dataset/*
+saved_models/*
+benchmark_dataset/*
+benchmark_qa/*
+processed_squad/*

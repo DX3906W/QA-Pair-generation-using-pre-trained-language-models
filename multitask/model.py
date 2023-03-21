@@ -16,8 +16,10 @@ class MultitaskModel(nn.Module):
 
     def forward(self, encoder_input_ids, encoder_attention_mask,
                 decoder_input_ids, decoder_attention_mask):
-        res = self.lm(encoder_input_ids, encoder_attention_mask,
-                      decoder_input_ids, decoder_attention_mask,
+        res = self.lm(input_ids=encoder_input_ids,
+                      attention_mask=encoder_attention_mask,
+                      decoder_input_ids=decoder_input_ids,
+                      decoder_attention_mask=decoder_attention_mask,
                       return_dict=True)
 
         decoder_last_hidden_state = res["last_hidden_state"]

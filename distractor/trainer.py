@@ -3,26 +3,33 @@ from torch.utils.data import DataLoader
 from transformers import AdamW
 
 from data_loader import *
-from data_processor import DistractorDataset
-from model import DistractorGenerationModel
+from .data_processor import DistractorDataset
+from .model import DistractorGenerationModel
 from utils import *
 
 
 class DGTrainer:
     def __init__(self,
                  lm,
+                 generative_lm,
+                 lm_name,
                  tokenizer,
-                 max_encoder_len,
                  lambda_p,
                  batch_size,
                  epochs,
                  lr,
                  vocab_size,
-                 dataset
+                 embed_dim,
+                 num_heads,
+                 dataset,
+                 max_encoder_len=128,
+                 max_decoder_len=64,
+                 saved_model=None
                  ):
-        self.lm = lm
-        self.tokenizer = tokenizer
+        self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.max_encoder_len = max_encoder_len
+        self.lm_name = lm_name
+        self.saved_model = saved_model
 
         self.lambda_p = lambda_p
         self.batch_size = batch_size
@@ -32,18 +39,20 @@ class DGTrainer:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.dataset = dataset.lower()
 
-        self.model = DistractorGenerationModel(self.lm)
+        self.model = generative_lm.from_pretrained(lm_name)
         self.optimizer = AdamW(params=self.model.parameters(), lr=self.lr)
+        if self.saved_model is not None:
+            self.load_model_from_ckpt()
+        self.model.to(self.device)
 
         self.load_data()
 
+    def load_model_from_ckpt(self):
+        ckpt = torch.load(self.saved_model)
+        self.model.load_state_dict(ckpt['state_dict'])
+        self.optimizer.load_state_dict(ckpt['state_dict'])
+
     def load_data(self):
-        if 'squad' in self.dataset:
-            data = SQuADLoader().get_data()
-        elif 'race' in self.dataset:
-            data = RACELoader().get_data()
-        else:
-            data = None
         data_loader = DGRACELoader()
         train_data = data_loader.load_data('race_train_original.json')
         dev_data = data_loader.load_data('race_dev_original.json')
@@ -63,8 +72,8 @@ class DGTrainer:
             for step, data in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
                 batch = [d.to(self.device) for d in data]
-                p_input_ids, p_attention_mask, a_input_ids = batch[4:]
-                outputs = self.model(p_input_ids, p_attention_mask, a_input_ids)
+                p_input_ids, p_attention_mask, d_input_ids = batch
+                outputs = self.model(p_input_ids, p_attention_mask, d_input_ids)
 
                 loss = outputs[0]
                 loss.backward()
@@ -72,13 +81,16 @@ class DGTrainer:
 
                 if step % 10 == 0:
                     print("Epoch: {}  Step:{}  Loss:{}".format(epoch, step, loss.item()))
+            torch.save({'state_dict': self.model, 'optimizer': self.optimizer},
+                       '../saved_models/distractor_{lm_name}_{epoch}.pth.tar'.format(lm_name=self.lm_name, epoch=epoch))
+            self.validate()
 
     def validate(self):
         self.model.eval()
         with torch.no_grad():
             for step, data in enumerate(self.val_dataloader):
                 batch = [d.to(self.device) for d in data]
-                p_input_ids, p_attention_mask, a_input_ids = batch[4:]
+                p_input_ids, p_attention_mask, a_input_ids = batch
                 outputs = self.model(p_input_ids, p_attention_mask, a_input_ids)
                 loss = outputs[0]
                 if step % 10 == 0:
