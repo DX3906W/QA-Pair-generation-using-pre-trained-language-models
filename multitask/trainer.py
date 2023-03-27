@@ -51,6 +51,7 @@ class MultitaskTrainer:
         self.max_decoder_len = max_decoder_len
 
         self.model = MultitaskModel(self.lm, embed_dim, num_heads, vocab_size)
+        self.model.to(self.device)
         self.optimizer = AdamW(params=self.model.parameters(), lr=self.lr)
         if self.saved_model is not None:
             self.load_model_from_ckpt()
@@ -88,7 +89,7 @@ class MultitaskTrainer:
                 batch = [d.to(self.device) for d in data]
                 true_start_id, true_end_id, true_decode_id = batch[4:]
                 start_logits, end_logits, decoder_out = self.model(*batch[:4])
-
+                
                 true_decode_id = true_decode_id.view(-1)
                 decoder_out = decoder_out.view(-1, self.vocab_size)
 
@@ -110,7 +111,7 @@ class MultitaskTrainer:
                        '{path}/multi_{lm_name}_{epoch}.pth.tar'.format(
                            path=path, lm_name=self.lm_name, epoch=epoch))
             self.validate()
-            self.infer(epoch, 'greedy_decode')
+            print(self.infer(epoch, 'greedy_decode'))
 
     def validate(self):
         self.model.eval()

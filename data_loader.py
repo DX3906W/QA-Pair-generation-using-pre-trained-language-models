@@ -35,7 +35,7 @@ class SQuADLoader:
             next_index = index + len(sent)
             if answer in sent:
                 if index <= answer_index < next_index:
-                    idx = sent.index(answer)
+                    idx = answer_index - index
                     return sent, idx
             index = next_index
             if index < len(context) and context[index] == ' ':
@@ -96,13 +96,14 @@ class SQuADLoader:
             'answers': self.filter(train_answers),
             'answer_start': self.filter(train_answer_index),
         }
-
+        # print(train_data['answer_start'])
         test_data = {
             'context': self.filter(test_contexts),
             'questions': self.filter(test_questions),
             'answers': self.filter(test_answers),
             'answer_start': self.filter(test_answer_index),
         }
+        # print(test_data['answer_start'])
         train_json = json.dumps(train_data)
         test_json = json.dumps(test_data)
 

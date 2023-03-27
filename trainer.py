@@ -45,13 +45,13 @@ class Trainer:
             'generative_lm': self.generative_lm,
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
-            'lambda_p': 0.7,
-            'batch_size': 4,
-            'epochs': 10,
-            'lr': 2e-5,
+            'lambda_p': 0.2,
+            'batch_size': 32,
+            'epochs': 5,
+            'lr': 1e-4,
             'vocab_size': 32128,
             'embed_dim': 512,
-            'num_heads': 8,
+            'num_heads': 4,
             'dataset': 'processed_squad',
             'max_encoder_len': 512,
             'saved_model': None,
@@ -128,5 +128,5 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer('agtask', 't5', 't5-small')
+    trainer = Trainer('multitask', 't5', 't5-small')
     trainer.train()

@@ -31,7 +31,7 @@ class AGQGTrainer:
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.generation_task = generation_task
         self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
-        print(self.benchmark_data)
+        # print(self.benchmark_data)
 
         self.lm_name = lm_name
 
@@ -40,7 +40,7 @@ class AGQGTrainer:
         self.epochs = epochs
         self.lr = lr
         self.vocab_size = vocab_size
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.dataset = dataset.lower()
         self.saved_model = saved_model
 
@@ -135,6 +135,7 @@ class AGQGTrainer:
                                                        max_length=self.max_encoder_len)
             with torch.no_grad():
                 input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
+                input_ids = input_ids.to(self.device)
                 outputs = self.model.generate(input_ids)
                 decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
                 predictions.append(decoded_outputs)

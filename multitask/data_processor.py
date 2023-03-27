@@ -13,14 +13,31 @@ class MultitaskDataset(Dataset):
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.datas = datas[:4]
+        self.datas = datas
 
     def __len__(self):
         return len(self.datas)
 
     def __getitem__(self, index):
-        p, q, a, start_idx = self.datas[index]
-        end_idx = start_idx + len(a)
+        p, q, a, answer_index = self.datas[index]
+        # print(p)
+        # print(q)
+        # print(a)
+        # print(start_idx)
+        start_idx = 0
+        q_tokenized = self.tokenizer.tokenize(p)
+        a_tokenized = self.tokenizer.tokenize(a)
+        # print(q_tokenized)
+        # print(a_tokenized)
+        for i in range(len(q_tokenized)):
+            if answer_index == 0:
+                start_idx = i + 1
+                break
+            answer_index -= len(q_tokenized[i])
+        # print(start_idx)
+        end_idx = start_idx + len(a_tokenized)
+        # print(end_idx)
+        # print(q_tokenized[start_idx:end_idx])
         encoder_inputs = self.tokenizer.encode_plus(p,
                                                     return_tensors="pt",
                                                     padding="max_length",
