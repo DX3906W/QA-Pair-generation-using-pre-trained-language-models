@@ -128,5 +128,5 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer('multitask', 't5', 't5-small')
+    trainer = Trainer('agtask', 't5', 't5-small')
     trainer.train()
