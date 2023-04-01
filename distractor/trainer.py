@@ -1,3 +1,4 @@
+import os
 import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW
@@ -27,6 +28,7 @@ class DGTrainer:
                  saved_model=None
                  ):
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
         self.max_encoder_len = max_encoder_len
         self.lm_name = lm_name
         self.saved_model = saved_model
@@ -81,9 +83,15 @@ class DGTrainer:
 
                 if step % 10 == 0:
                     print("Epoch: {}  Step:{}  Loss:{}".format(epoch, step, loss.item()))
+            path = './saved_models/distractor/{lm_name}'.format(lm_name=self.lm_name)
+            folder = os.path.exists(path)
+            if not folder:
+                print('creat path')
+                os.makedirs(path)
             torch.save({'state_dict': self.model, 'optimizer': self.optimizer},
-                       '../saved_models/distractor_{lm_name}_{epoch}.pth.tar'.format(lm_name=self.lm_name, epoch=epoch))
+                       './{path}/{epoch}.pth.tar'.format(path=path, epoch=epoch))
             self.validate()
+            print(self.infer())
 
     def validate(self):
         self.model.eval()
@@ -96,19 +104,24 @@ class DGTrainer:
                 if step % 10 == 0:
                     print(" Step:{}  Loss:{}".format(step, loss.item()))
 
-    def infer(self, p):
+    def infer(self, save_predictions=False):
         self.model.eval()
-        decoded_outputs = []
-        p_encode = self.tokenizer.encode_plus(p,
-                                              return_tensors="pt",
-                                              padding="max_length",
-                                              truncation=True,
-                                              max_length=self.max_encoder_len)
-        with torch.no_grad():
-            p_input_ids, p_attention_mask = p_encode['input_ids'][0], p_encode['attention_mask'][0]
-            outputs = self.model.generate(p_input_ids, p_attention_mask)
-
-            decoded = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
-            decoded_outputs.append(decoded)
-
-        return decoded_outputs
+        predictions = []
+        references = []
+        for passage, answer, question, distractor in zip(self.benchmark_data['passage'], self.benchmark_data['answer'],
+                                                         self.benchmark_data['question'],
+                                                         self.benchmark_data['distractor']):
+            input_text = 'Generated distractor: ' + question + 'answer: ' + answer + 'context: ' + passage + ' </s>'
+            references.append(distractor)
+            encode_inputs = self.tokenizer.encode_plus(input_text,
+                                                       return_tensors="pt",
+                                                       padding='max_length',
+                                                       truncation=True,
+                                                       max_length=self.max_encoder_len)
+            with torch.no_grad():
+                input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
+                input_ids = input_ids.to(self.device)
+                outputs = self.model.generate(input_ids)
+                decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
+                predictions.append(decoded_outputs)
+        return evaluate_metrics(predictions, references)
