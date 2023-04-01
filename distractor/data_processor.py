@@ -32,7 +32,6 @@ class DistractorDataset(Dataset):
                                                     padding="max_length",
                                                     truncation=True,
                                                     max_length=self.max_encoder_len)
-
         decoder_inputs = self.tokenizer.encode_plus(d,
                                                     return_tensors="pt",
                                                     padding="max_length",
