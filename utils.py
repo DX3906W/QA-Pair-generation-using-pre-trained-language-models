@@ -6,7 +6,6 @@ def rouge(predictions, references):
     results = rouge.compute(predictions=predictions, references=references, tokenizer=lambda x: x.split())
     for key in results.keys():
         results[key] *= 100
-    print(results)
     return results
 
 

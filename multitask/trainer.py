@@ -33,8 +33,10 @@ class MultitaskTrainer:
         self.lm = lm.from_pretrained(lm_name)
         # print(self.lm.config.vocab_size)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
-        # print(self.tokenizer.vocab_size)
-        # self.tokenizer.save_pretrained('./')
+        self.tokenizer.add_special_tokens({'mask_token': "<mask>"})
+        print(self.tokenizer.mask_token)
+        print(self.tokenizer.vocab_size)
+        self.tokenizer.save_pretrained('./')
         self.lm_name = lm_name
         self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
 
@@ -51,6 +53,7 @@ class MultitaskTrainer:
         self.max_decoder_len = max_decoder_len
 
         self.model = MultitaskModel(self.lm, embed_dim, num_heads, vocab_size)
+        self.model.to(self.device)
         self.optimizer = AdamW(params=self.model.parameters(), lr=self.lr)
         if self.saved_model is not None:
             self.load_model_from_ckpt()
@@ -88,7 +91,7 @@ class MultitaskTrainer:
                 batch = [d.to(self.device) for d in data]
                 true_start_id, true_end_id, true_decode_id = batch[4:]
                 start_logits, end_logits, decoder_out = self.model(*batch[:4])
-
+                
                 true_decode_id = true_decode_id.view(-1)
                 decoder_out = decoder_out.view(-1, self.vocab_size)
 
@@ -107,10 +110,10 @@ class MultitaskTrainer:
                 os.makedirs(path)
 
             torch.save({'state_dict': self.model, 'optimizer': self.optimizer},
-                       '{path}/multi_{lm_name}_{epoch}.pth.tar'.format(
+                       '{path}/multi_{epoch}.pth.tar'.format(
                            path=path, lm_name=self.lm_name, epoch=epoch))
             self.validate()
-            self.infer(epoch, 'greedy_decode')
+            print(self.infer(epoch, 'greedy_decode'))
 
     def validate(self):
         self.model.eval()
@@ -158,7 +161,7 @@ class MultitaskTrainer:
 
     def greedy_decode(self, input_text, max_encoder_length):
         self.model.eval()
-        cls_id = self.tokenizer.pad_token_id
+        cls_id = self.tokenizer.eos_token_id
         sep_id = self.tokenizer.eos_token_id
         max_question_length = self.max_decoder_len
 
@@ -218,7 +221,7 @@ class MultitaskTrainer:
         :param min_ends: 最小结束符号数目
         :return:
         """
-        cls_id = self.tokenizer.pad_token_id
+        cls_id = self.tokenizer.eos_token_id
         sep_id = self.tokenizer.eos_token_id
         max_question_length = self.max_decoder_len
         max_encoder_length = self.max_encoder_len

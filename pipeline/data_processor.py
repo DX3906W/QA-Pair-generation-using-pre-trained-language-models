@@ -11,13 +11,13 @@ class AGDataset(Dataset):
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.datas = datas[:4]
+        self.datas = datas
 
     def __len__(self):
         return len(self.datas)
 
     def __getitem__(self, index):
-        p, q, a = self.datas[index]
+        p, q, a, _ = self.datas[index]
         p_inputs = self.tokenizer.encode_plus(p,
                                               return_tensors="pt",
                                               padding="max_length",
@@ -46,13 +46,13 @@ class QGDataset(Dataset):
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.datas = datas[:10]
+        self.datas = datas
 
     def __len__(self):
         return len(self.datas)
 
     def __getitem__(self, index):
-        p, q, a = self.datas[index]
+        p, q, a, _ = self.datas[index]
         p_a = p + ' [SEP] ' + a
         pa_inputs = self.tokenizer.encode_plus(p_a,
                                                return_tensors="pt",
