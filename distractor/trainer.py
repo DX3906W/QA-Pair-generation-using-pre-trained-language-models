@@ -83,9 +83,9 @@ class DGTrainer:
                 self.optimizer.zero_grad()
                 batch = [d.to(self.device) for d in data]
                 p_input_ids, p_attention_mask, d_input_ids = batch
-                outputs = self.model(input_ids=p_input_ids, 
-                        attention_mask=p_attention_mask, 
-                        labels=d_input_ids)
+                outputs = self.model(input_ids=p_input_ids,
+                                     attention_mask=p_attention_mask,
+                                     labels=d_input_ids)
 
                 loss = outputs[0]
                 loss.backward()

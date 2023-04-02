@@ -4,7 +4,6 @@ type
 class
 value_type
 data_type
-Why are there two different data types for numbers? One reason has to do with program style. Values that represent counts can’t be fractional. Using an int value tells the reader of a program that the value can’t be a fraction. Another reason has to do with the efficiency of various operations. The algorithms that perform computer arithmetic are simpler and, therefore, faster for ints than the more general algorithms required for float values. 
 You should be warned that the float type only stores approximations of real numbers. There is a limit to the precision or accuracy of the stored values. Since float values are not exact, while ints always are, your general rule of thumb should be: If you don’t need fractional values, use an int.
 What is the limitation of using floating-point values in programming?
 Float values only store approximations of real numbers
