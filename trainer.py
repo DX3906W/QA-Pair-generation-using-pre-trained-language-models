@@ -128,5 +128,5 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer('dgtask', 'bart', 'facebook/bart-base')
+    trainer = Trainer('dgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     trainer.train()

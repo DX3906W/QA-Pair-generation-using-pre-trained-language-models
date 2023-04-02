@@ -23,8 +23,9 @@ class DistractorDataset(Dataset):
         q = ' '.join(self.datas[index]['question'])
         a = ' '.join(self.datas[index]['answer_text'])
         d = ' '.join(self.datas[index]['distractor'])
-        input_text = 'Generated distractor: ' + q + ' answer: ' + a + ' context: ' + p + ' </s>'
-
+        
+        input_text = 'Generated distractor: ' + q + ' answer: ' + a + ' context: ' + p
+        
         encoder_inputs = self.tokenizer.encode_plus(input_text,
                                                     return_tensors="pt",
                                                     padding="max_length",
