@@ -29,6 +29,12 @@ class AGQGTrainer:
                  generation_task='answer',
                  ):
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        lm_vocab_path = './{lm_name}_vocab'.format(lm_name=lm_name)
+        if not os.path.exists(lm_vocab_path):
+            os.mkdirs(lm_vocab_path)
+        self.tokenizer.save_pretrained(lm_vocab_path)
+        print('vocab size: ', self.tokenizer.vocab_size)
+        print('special tokens: ', self.tokenizer.all_special_tokens)
         self.generation_task = generation_task
         self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
         # print(self.benchmark_data)

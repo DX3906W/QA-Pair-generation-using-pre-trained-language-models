@@ -25,9 +25,16 @@ class DGTrainer:
                  dataset,
                  max_encoder_len=128,
                  max_decoder_len=64,
-                 saved_model=None
+                 saved_model=None,
+                 generation_task='answer',
                  ):
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        lm_vocab_path = './{lm_name}_vocab'.format(lm_name=lm_name)
+        if not os.path.exists(lm_vocab_path):
+            os.makedirs(lm_vocab_path)
+        self.tokenizer.save_pretrained(lm_vocab_path)
+        print("vocab size: ", self.tokenizer.vocab_size)
+        print("special tokens: ", self.tokenizer.all_special_tokens)
         self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
         self.max_encoder_len = max_encoder_len
         self.lm_name = lm_name
@@ -40,7 +47,8 @@ class DGTrainer:
         self.vocab_size = vocab_size
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.dataset = dataset.lower()
-
+        
+        print('Loading model: ', lm_name)
         self.model = generative_lm.from_pretrained(lm_name)
         self.optimizer = AdamW(params=self.model.parameters(), lr=self.lr)
         if self.saved_model is not None:
@@ -56,13 +64,13 @@ class DGTrainer:
 
     def load_data(self):
         data_loader = DGRACELoader()
-        train_data = data_loader.load_data('race_train_original.json')
+        train_data = data_loader.load_data('race_train_updated.json')
         dev_data = data_loader.load_data('race_dev_original.json')
         test_data = data_loader.load_data('race_test_original.json')
 
-        train_dataset = DistractorDataset(train_data, self.tokenizer)
-        val_dataset = DistractorDataset(dev_data, self.tokenizer)
-        test_dataset = DistractorDataset(test_data, self.tokenizer)
+        train_dataset = DistractorDataset(train_data, self.tokenizer, self.max_encoder_len)
+        val_dataset = DistractorDataset(dev_data, self.tokenizer, self.max_encoder_len)
+        test_dataset = DistractorDataset(test_data, self.tokenizer, self.max_encoder_len)
 
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.batch_size, shuffle=True)
@@ -75,7 +83,9 @@ class DGTrainer:
                 self.optimizer.zero_grad()
                 batch = [d.to(self.device) for d in data]
                 p_input_ids, p_attention_mask, d_input_ids = batch
-                outputs = self.model(p_input_ids, p_attention_mask, d_input_ids)
+                outputs = self.model(input_ids=p_input_ids, 
+                        attention_mask=p_attention_mask, 
+                        labels=d_input_ids)
 
                 loss = outputs[0]
                 loss.backward()
@@ -99,7 +109,9 @@ class DGTrainer:
             for step, data in enumerate(self.val_dataloader):
                 batch = [d.to(self.device) for d in data]
                 p_input_ids, p_attention_mask, a_input_ids = batch
-                outputs = self.model(p_input_ids, p_attention_mask, a_input_ids)
+                outputs = self.model(input_ids=p_input_ids, 
+                        attention_mask=p_attention_mask, 
+                        labels=a_input_ids)
                 loss = outputs[0]
                 if step % 10 == 0:
                     print(" Step:{}  Loss:{}".format(step, loss.item()))
@@ -112,16 +124,17 @@ class DGTrainer:
                                                          self.benchmark_data['question'],
                                                          self.benchmark_data['distractor']):
             input_text = 'Generated distractor: ' + question + 'answer: ' + answer + 'context: ' + passage + ' </s>'
-            references.append(distractor)
+            references.extend(distractor)
             encode_inputs = self.tokenizer.encode_plus(input_text,
                                                        return_tensors="pt",
                                                        padding='max_length',
                                                        truncation=True,
                                                        max_length=self.max_encoder_len)
-            with torch.no_grad():
-                input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
-                input_ids = input_ids.to(self.device)
-                outputs = self.model.generate(input_ids)
-                decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
-                predictions.append(decoded_outputs)
+            for _ in range(3):
+                with torch.no_grad():
+                    input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
+                    input_ids = input_ids.to(self.device)
+                    outputs = self.model.generate(input_ids)
+                    decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
+                    predictions.append(decoded_outputs)
         return evaluate_metrics(predictions, references)

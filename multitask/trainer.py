@@ -31,12 +31,15 @@ class MultitaskTrainer:
                  generation_task='answer',
                  ):
         self.lm = lm.from_pretrained(lm_name)
-        # print(self.lm.config.vocab_size)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
-        self.tokenizer.add_special_tokens({'mask_token': "<mask>"})
-        print(self.tokenizer.mask_token)
-        print(self.tokenizer.vocab_size)
-        self.tokenizer.save_pretrained('./')
+        if 't5' in lm_name:
+            self.tokenizer.add_special_tokens({'mask_token': "<mask>"})
+        print('special tokens: ', self.tokenizer.all_special_tokens)
+        print('vocab size: ', self.tokenizer.vocab_size)
+        lm_vocab_path = './{lm_name}_vocab'.format(lm_name)
+        if not os.path.exists(lm_vocab_path):
+            os.mkdirs(lm_vocab_path)
+        self.tokenizer.save_pretrained(lm_vocab_path)
         self.lm_name = lm_name
         self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
 

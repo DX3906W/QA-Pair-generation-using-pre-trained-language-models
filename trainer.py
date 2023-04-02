@@ -46,7 +46,7 @@ class Trainer:
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
             'lambda_p': 0.2,
-            'batch_size': 8,
+            'batch_size': 16,
             'epochs': 5,
             'lr': 2e-5,
             'vocab_size': 32100,
@@ -128,5 +128,5 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer('multitask', 't5', 't5-base')
+    trainer = Trainer('dgtask', 'bart', 'facebook/bart-base')
     trainer.train()

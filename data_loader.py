@@ -149,9 +149,10 @@ class DGRACELoader:
 
     def load_data(self, file_name):
         lines = []
+        # print(self.file_path + file_name)
         with codecs.open(self.file_path + file_name, "r", "utf-8") as corpus_file:
             for line in corpus_file:
-                 lines.append(eval(line))
+                lines.append(eval(line))
         return lines
 
 
@@ -169,6 +170,7 @@ class BenchmarkLoader:
         question = []
         answer = []
         distractor = []
+        temp = []
         for idx, line in enumerate(lines):
             if idx % 6 == 0:
                 passage.append(line)
@@ -179,8 +181,11 @@ class BenchmarkLoader:
             if idx % 6 == 2:
                 answer.append(line)
                 continue
-            distractor.append(line)
-        return {'passage': passage, 'answer': answer, 'question': question, 'diatractor': distractor}
+            temp.append(line)
+            if len(temp) == 3:
+                distractor.append(temp)
+                temp = []
+        return {'passage': passage, 'answer': answer, 'question': question, 'distractor': distractor}
 
 
 if __name__ == "__main__":

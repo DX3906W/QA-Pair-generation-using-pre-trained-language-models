@@ -6,15 +6,14 @@ from torch.utils.data import Dataset
 
 class DistractorDataset(Dataset):
     def __init__(self,
-                 file_name,
+                 datas,
                  tokenizer,
                  max_encoder_len=128,
                  max_decoder_len=64):
         self.tokenizer = tokenizer
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
-        data_loader = DGRACELoader()
-        self.datas = data_loader.load_data(file_name)
+        self.datas = datas
 
     def __len__(self):
         return len(self.datas)
@@ -22,11 +21,11 @@ class DistractorDataset(Dataset):
     def __getitem__(self, index):
         p = ' '.join(self.datas[index]['article'])
         q = ' '.join(self.datas[index]['question'])
-        a = ' '.join(self.datas[index]['answer'])
+        a = ' '.join(self.datas[index]['answer_text'])
         d = ' '.join(self.datas[index]['distractor'])
-
-        input_text = 'Generated distractor: ' + q + 'answer: ' + a + 'context: ' + p + ' </s>'
-
+        
+        input_text = 'Generated distractor: ' + q + ' answer: ' + a + ' context: ' + p + ' </s>'
+        
         encoder_inputs = self.tokenizer.encode_plus(input_text,
                                                     return_tensors="pt",
                                                     padding="max_length",
