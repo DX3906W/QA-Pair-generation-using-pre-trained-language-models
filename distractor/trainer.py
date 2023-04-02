@@ -138,3 +138,23 @@ class DGTrainer:
                     decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
                     predictions.append(decoded_outputs)
         return evaluate_metrics(predictions, references)
+
+
+class DistractorGenerator:
+    def __init__(self, lm, lm_name, tokenizer, saved_dg_model, max_encoder_len):
+        self.dg_model = lm.from_pretrained(saved_dg_model)
+        self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.max_encoder_len = max_encoder_len
+
+    def generate(self, p, q, a):
+        with torch.no_grad():
+            input_text = 'Generated distractor: ' + q + ' answer: ' + a + ' context: ' + p
+            p_encode = self.tokenizer.encode_plus(input_text,
+                                                  return_tensors="pt",
+                                                  padding="max_length",
+                                                  truncation=True,
+                                                  max_length=self.max_encoder_len)
+            p_input_ids, p_attention_mask = p_encode['input_ids'][0], p_encode['attention_mask'][0]
+            g_a_encode = self.dg_model.generate(p_input_ids, p_attention_mask)
+            g_d = self.tokenizer.decode(g_a_encode.squeeze().tolist(), skip_special_tokens=True)
+            return g_d

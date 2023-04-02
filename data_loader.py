@@ -161,31 +161,29 @@ class BenchmarkLoader:
         self.file_path = 'benchmark_dataset/'
 
     def load_data(self, file_name):
-        lines = []
-        with codecs.open(self.file_path + file_name, "r", "utf-8") as corpus_file:
-            for line in corpus_file:
-                lines.append(line.strip())
+        with open(self.file_path + file_name, 'r') as f:
+            json_dict = json.load(f)
+        f.close()
+        all_qa = []
+        for qas in json_dict.values():
+            all_qa.extend(qas)
+        q = []
+        a = []
+        p = []
+        d = []
+        for qa in all_qa:
+            p.append(qa['passage'])
+            a.append(qa['answer'])
+            q.append(qa['question'])
+            d.append(qa['distractor'])
 
-        passage = []
-        question = []
-        answer = []
-        distractor = []
-        temp = []
-        for idx, line in enumerate(lines):
-            if idx % 6 == 0:
-                passage.append(line)
-                continue
-            if idx % 6 == 1:
-                question.append(line)
-                continue
-            if idx % 6 == 2:
-                answer.append(line)
-                continue
-            temp.append(line)
-            if len(temp) == 3:
-                distractor.append(temp)
-                temp = []
-        return {'passage': passage, 'answer': answer, 'question': question, 'distractor': distractor}
+        all_qa_dict = {
+            'passage': p,
+            'question': q,
+            'answer': a,
+            'distractor': d
+        }
+        return all_qa_dict
 
 
 if __name__ == "__main__":
