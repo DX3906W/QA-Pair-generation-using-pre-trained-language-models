@@ -152,26 +152,30 @@ class Trainer:
         d_predictions = []
         d_references = []
         path = './benchmark_qa/multitask/{lm_type}'.format(lm_type=lm_type)
-        if os.path.exists(path):
+        path = './benchmark_qa/pipeline/{lm_type}'.format(lm_type=lm_type)
+        if not os.path.exists(path):
             os.makedirs(path)
+        with open('{path}/pipeline.txt'.format(path=path), 'w+') as f:
+            for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
+                                  benchmark_data['question'], benchmark_data['distractor']):
+                g_a, g_q = generator.generate('beam_search', p)
+                references.append(a + ' ' + q)
+                predictions.append(g_a + ' ' + g_q)
 
-        for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
-                              benchmark_data['question'], benchmark_data['distractor']):
-            g_a, g_q = generator.generate('beam_search', p)
-            references.append(a + ' ' + q)
-            predictions.append(g_a + ' ' + g_q)
-
-            g_d = d_generator.generate(p, g_q, g_a)
-            d_predictions.append(g_d)
-            d_references.append(d)
-
-            with open('{path}/multitask_{saved_model}.txt'.format(
-                    path=path, saved_model=saved_model, ), 'a') as f:
+                g_d = d_generator.generate(p, g_q, g_a)
+                d_predictions.append(g_d)
+                d_references.append(d)
+                for _ in range(3):
+                    g_d = d_generator.generate(p, g_q, g_a)
+                    d_predictions.append(g_d)
+                    d_references.append(d)
                 f.write(p + '\n')
                 f.write(g_q + '\n')
                 f.write(g_a + '\n')
+                for i in range(3, 0, -1):
+                    f.write(d_predictions[-i] + '\n')
                 f.write('\n')
-            f.close()
+                f.close()
 
         print('Generated question and answer evaluation: ', evaluate_metrics(predictions, references))
         print('Generated distractors evaluation: ', evaluate_metrics(d_predictions, d_references))
