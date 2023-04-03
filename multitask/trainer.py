@@ -442,35 +442,22 @@ class MultitaskTrainer:
 
 class MultitaskGenerator:
     def __init__(self,
-                 lm,
                  lm_name,
                  tokenizer,
-                 vocab_size,
-                 embed_dim,
-                 num_heads,
                  max_encoder_len=128,
                  max_decoder_len=64,
                  saved_model=None
                  ):
-        self.lm = lm.from_pretrained(lm_name)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
-        self.lm_name = lm_name
-        self.benchmark_data = BenchmarkLoader().load_data('python_programming')
 
-        self.vocab_size = vocab_size
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.saved_model = saved_model
 
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.model = MultitaskModel(self.lm, embed_dim, num_heads, vocab_size)
+        self.model = torch.load(saved_model)['state_dict']
         self.model.to(self.device)
-        self.load_model_from_ckpt()
-
-    def load_model_from_ckpt(self):
-        ckpt = torch.load(self.saved_model)
-        self.model.load_state_dict(ckpt['state_dict'])
 
     def generate(self, passage, decode_strategy):
         self.model.eval()

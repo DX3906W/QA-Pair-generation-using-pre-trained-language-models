@@ -141,8 +141,8 @@ class DGTrainer:
 
 
 class DistractorGenerator:
-    def __init__(self, lm, lm_name, tokenizer, saved_dg_model, max_encoder_len):
-        self.dg_model = lm.from_pretrained(saved_dg_model)
+    def __init__(self, lm_name, tokenizer, saved_dg_model, max_encoder_len):
+        self.dg_model = torch.load(saved_dg_model)['state_dict']
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.max_encoder_len = max_encoder_len
 

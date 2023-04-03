@@ -32,7 +32,6 @@ class QuestionGenerationModel(nn.Module):
         outputs = self.qg_model(
             input_ids=pa_input_ids,
             attention_mask=pa_attention_mask,
-            # decoder_input_ids=y_ids,
             labels=label_ids,
         )
 

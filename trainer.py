@@ -1,19 +1,19 @@
+import torch
+
 from data_loader import BenchmarkLoader
 from multitask.trainer import MultitaskTrainer, MultitaskGenerator
 from pipeline.trainer import AGQGTrainer, PipelineGenerator
 from distractor.trainer import DGTrainer, DistractorGenerator
 
 from transformers import T5Model, ProphetNetModel, BartModel
+from transformers import T5Config, ProphetNetConfig, BartConfig
 from transformers import T5ForConditionalGeneration, ProphetNetForConditionalGeneration, BartForConditionalGeneration
 from transformers import T5Tokenizer, ProphetNetTokenizer, BartTokenizer
 from utils import evaluate_metrics
 
 
 class Trainer:
-    def __init__(self,
-                 task_name,
-                 lm_type,
-                 lm_name):
+    def __init__(self):
         self.task_names = {
             'multitask': MultitaskTrainer,
             'qgtask': AGQGTrainer,
@@ -30,11 +30,18 @@ class Trainer:
             'prophetnet': ProphetNetForConditionalGeneration,
             'bart': BartForConditionalGeneration,
         }
+        self.lm_configs = {
+            't5': T5Config,
+            'prophetnet': ProphetNetConfig,
+            'bart': BartConfig,
+        }
         self.tokenizers = {
             't5': T5Tokenizer,
             'prophetnet': ProphetNetTokenizer,
             'bart': BartTokenizer
         }
+
+    def train(self, task_name, lm_type, lm_name):
         self.lm = self.lms.get(lm_type)
         self.generative_lm = self.generative_lms.get(lm_type)
         self.lm_name = lm_name
@@ -66,14 +73,11 @@ class Trainer:
         if self.task is None:
             return
 
-    def train(self):
         self.task.train()
 
     def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, saved_dg_model, max_encoder_len):
-        lm = self.lms.get(lm_type)
-        tokenizer = self.tokenizer.get(lm_type)
+        tokenizer = self.tokenizers.get(lm_type)
         param_dict = {
-            'lm': lm,
             'lm_name': lm_name,
             'tokenizer': tokenizer,
             'saved_ag_model': saved_ag_model,
@@ -82,21 +86,20 @@ class Trainer:
         }
         generator = PipelineGenerator(**param_dict)
         dg_param_dict = {
-            'lm': lm,
             'lm_name': lm_name,
             'tokenizer': tokenizer,
             'saved_dg_model': saved_dg_model,
             'max_encoder_len': max_encoder_len,
         }
         d_generator = DistractorGenerator(**dg_param_dict)
-        benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
+        benchmark_data = BenchmarkLoader().load_data('python_programming.json')
         predictions = []
         references = []
         d_predictions = []
         d_references = []
 
         for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
-                           benchmark_data['question'], benchmark_data['distractor']):
+                              benchmark_data['question'], benchmark_data['distractor']):
             g_a, g_q = generator.generate(p)
             references.append(a + ' ' + q)
             predictions.append(g_a + ' ' + g_q)
@@ -119,21 +122,16 @@ class Trainer:
     def test_multitask(self, lm_type, lm_name, vocab_size, embed_dim, num_heads, saved_model,
                        saved_dg_model, max_encoder_len):
         lm = self.lms.get(lm_type)
-        tokenizer = self.tokenizer.get(lm_type)
+        tokenizer = self.tokenizers.get(lm_type)
         param_dict = {
-            'lm': lm,
             'lm_name': lm_name,
             'tokenizer': tokenizer,
-            'vocab_size': vocab_size,
-            'embed_dim': embed_dim,
-            'num_heads': num_heads,
             'max_encoder_len': 128,
             'max_decoder_len': 64,
             'saved_model': saved_model,
         }
         generator = MultitaskGenerator(**param_dict)
         dg_param_dict = {
-            'lm': lm,
             'lm_name': lm_name,
             'tokenizer': tokenizer,
             'saved_dg_model': saved_dg_model,
@@ -141,7 +139,7 @@ class Trainer:
         }
         d_generator = DistractorGenerator(**dg_param_dict)
 
-        benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
+        benchmark_data = BenchmarkLoader().load_data('python_programming.json')
         predictions = []
         references = []
         d_predictions = []
@@ -179,7 +177,7 @@ class Trainer:
             'max_encoder_len': max_encoder_len,
         }
         generator = PipelineGenerator(**param_dict)
-        benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
+        benchmark_data = BenchmarkLoader().load_data('python_programming.json')
         predictions = []
         references = []
         for p, a, q in zip(benchmark_data['passage'], benchmark_data['answer'], benchmark_data['question']):
@@ -196,5 +194,19 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer('dgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
-    trainer.train()
+    trainer = Trainer()
+    # trainer.train('dgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
+    trainer.test_pipeline('t5',
+                          't5-small',
+                          'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
+                          'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
+                          'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
+                          512)
+    # trainer.test_multitask('t5',
+    #                        't5-small',
+    #                        30512,
+    #                        512,
+    #                        4,
+    #                        'saved_models/multitask/t5-small/multi_t5-small_0.pth.tar',
+    #                        'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
+    #                        512)

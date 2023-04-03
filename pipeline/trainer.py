@@ -157,9 +157,9 @@ class AGQGTrainer:
 
 
 class PipelineGenerator:
-    def __init__(self, lm, lm_name, tokenizer, saved_ag_model, saved_qg_model, max_encoder_len):
-        self.ag_model = lm.from_pretrained(saved_ag_model)
-        self.qg_model = lm.from_pretrained(saved_qg_model)
+    def __init__(self, lm_name, tokenizer, saved_ag_model, saved_qg_model, max_encoder_len):
+        self.ag_model = torch.load(saved_ag_model)['state_dict']
+        self.qg_model = torch.load(saved_qg_model)['state_dict']
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.max_encoder_len = max_encoder_len
 
