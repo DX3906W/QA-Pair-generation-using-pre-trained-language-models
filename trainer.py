@@ -53,15 +53,16 @@ class Trainer:
             'generative_lm': self.generative_lm,
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
-            'lambda_p': 0.2,
+            'lambda_p': 0,
             'batch_size': 16,
             'epochs': 5,
             'lr': 2e-5,
             'vocab_size': 32100,
-            'embed_dim': 768,
+            'embed_dim': 512,
             'num_heads': 4,
             'dataset': 'processed_squad',
-            'max_encoder_len': 512,
+            'max_encoder_len': 256,
+            'max_decoder_len': 128,
             'saved_model': None,
         }
         if task_name == 'qgtask':
@@ -83,7 +84,8 @@ class Trainer:
                       max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
         qa_file_name = self.analyze_file_name(saved_ag_model) + '_' + self.analyze_file_name(saved_qg_model) \
-                       + ' ' + self.analyze_file_name(saved_dg_model)
+                           + '_d_' + self.analyze_file_name(saved_dg_model)
+        
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
@@ -148,6 +150,7 @@ class Trainer:
             'tokenizer': tokenizer,
             'saved_dg_model': saved_dg_model,
             'max_encoder_len': max_encoder_len,
+            'max_decoder_len': 256,
         }
         d_generator = DistractorGenerator(**dg_param_dict)
 
@@ -162,7 +165,7 @@ class Trainer:
         with open('{path}/{qa_file_name}.txt'.format(path=path, qa_file_name=qa_file_name), 'w+') as f:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
-                g_a, g_q = generator.generate('beam_search', p)
+                g_q, g_a = generator.generate(passage=p, decode_strategy='beam_search')
                 references.append(a + ' ' + q)
                 predictions.append(g_a + ' ' + g_q)
 
@@ -179,7 +182,7 @@ class Trainer:
                 for i in range(3, 0, -1):
                     f.write(d_predictions[-i] + '\n')
                 f.write('\n')
-                f.close()
+        f.close()
 
         print('Generated question and answer evaluation: ', evaluate_metrics(predictions, references))
         print('Generated distractors evaluation: ', evaluate_metrics(d_predictions, d_references))
@@ -213,19 +216,16 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer()
-    # trainer.train('dgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
-    trainer.test_pipeline('t5',
-                          't5-base',
-                          'saved_models/pipeline/t5-base/answer_0.pth.tar',
-                          'saved_models/pipeline/t5-base/question_0.pth.tar',
-                          'saved_models/distractor/t5-base/0.pth.tar',
-                          512,
-                          512)
+    trainer.train('multitask', 't5', 't5-small')
+    # trainer.test_pipeline('t5',
+    #                       't5-base',
+    #                       'saved_models/pipeline/t5-base/answer_0.pth.tar',
+    #                       'saved_models/pipeline/t5-base/question_0.pth.tar',
+    #                       'saved_models/distractor/t5-base/0.pth.tar',
+    #                       512,
+    #                       512)
     # trainer.test_multitask('t5',
-    #                        't5-small',
-    #                        30512,
-    #                        512,
-    #                        4,
-    #                        'saved_models/multitask/t5-small/multi_t5-small_0.pth.tar',
-    #                        'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
+    #                        't5-base',
+    #                        'saved_models/multitask/t5-base/multi_1.pth.tar',
+    #                        'saved_models/distractor/t5-base/0.pth.tar',
     #                        512)

@@ -28,11 +28,11 @@ class MultitaskTrainer:
                  num_heads,
                  dataset,
                  max_encoder_len=128,
-                 max_decoder_len=64,
+                 max_decoder_len=256,
                  saved_model=None,
                  generation_task='answer',
                  ):
-        self.lm = lm.from_pretrained(lm_name)
+        self.lm = generative_lm.from_pretrained(lm_name)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         if 't5' in lm_name:
             self.tokenizer.add_special_tokens({'mask_token': "<mask>"})
@@ -43,7 +43,7 @@ class MultitaskTrainer:
             os.makedirs(lm_vocab_path)
         self.tokenizer.save_pretrained(lm_vocab_path)
         self.lm_name = lm_name
-        self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
+        self.benchmark_data = BenchmarkLoader().load_data('python_programming.json')
 
         self.lambda_p = lambda_p
         self.batch_size = batch_size
@@ -95,15 +95,17 @@ class MultitaskTrainer:
                 self.optimizer.zero_grad()
                 batch = [d.to(self.device) for d in data]
                 true_start_id, true_end_id, true_decode_id = batch[4:]
-                start_logits, end_logits, decoder_out = self.model(*batch[:4])
-                
-                true_decode_id = true_decode_id.view(-1)
-                decoder_out = decoder_out.view(-1, self.vocab_size)
-
+                start_logits, end_logits, _, decoder_loss = self.model(*batch[:4])
+                # print(decoder_out.shape)
+                # true_decode_id = true_decode_id.view(-1)
+                # decoder_out = decoder_out.view(-1, self.vocab_size)
+                # print(decoder_out.shape)
                 loss_start_idx = self.criterion(start_logits, true_start_id)
                 loss_end_idx = self.criterion(end_logits, true_end_id)
-                loss_decoder_idx = self.criterion(decoder_out, true_decode_id)
-                loss = self.lambda_p * loss_decoder_idx + (1 - self.lambda_p) * (loss_start_idx + loss_end_idx)
+                # print(start_logits)
+                # print(true_start_id.shape)
+                # loss_decoder_idx = self.criterion(decoder_out, true_decode_id)
+                loss = self.lambda_p * decoder_loss + (1 - self.lambda_p) * (loss_start_idx + loss_end_idx)
                 loss.backward()
                 self.optimizer.step()
 
@@ -117,8 +119,8 @@ class MultitaskTrainer:
             torch.save({'state_dict': self.model, 'optimizer': self.optimizer},
                        '{path}/multi_{epoch}.pth.tar'.format(
                            path=path, lm_name=self.lm_name, epoch=epoch))
-            self.validate()
-            print(self.infer(epoch, 'greedy_decode'))
+            # self.validate()
+            # print(self.infer(epoch, 'greedy_decode'))
 
     def validate(self):
         self.model.eval()
@@ -461,17 +463,29 @@ class MultitaskGenerator:
 
     def generate(self, passage, decode_strategy):
         self.model.eval()
-        if decode_strategy == "greedy_decode":
-            g_q, g_a = self.greedy_decode(passage, self.max_encoder_len)
-        else:
-            g_q, g_a = self.beam_search_decode(passage, topk=3, min_len=1, min_ends=1)
-        return g_q, g_a
+        p_inputs = self.tokenizer.encode_plus(passage
+                                   return_tensors='pt',
+                                   padding='max_length',
+                                   truncation=True,
+                                   max_length=self.max_encoder_len)
+        p_input_ids = p_inputs['input_ids'].to(self.device)
+        p_attention_mask = p_inputs['attention_mask'].to(self.device)
+        g_q_encode = self.model.generate_question(p_input_ids)
+        g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=True)
+        
+        start_logits, end_logits, decoder_logits, _ = self.model(p_input_ids, p_attention_mask, None, None)
+
+        # if decode_strategy == "greedy_decode":
+        #     g_q, g_a = self.greedy_decode(passage, self.max_encoder_len)
+        # else:
+        #     g_q, g_a = self.beam_search_decode(passage, topk=3, min_len=1, min_ends=1)
+        # return g_q, g_a
 
     def greedy_decode(self, input_text, max_encoder_length):
         self.model.eval()
-        cls_id = self.tokenizer.cls_token_id
-        sep_id = self.tokenizer.sep_token_id
-        max_question_length = 32
+        cls_id = self.tokenizer.pad_token_id
+        sep_id = self.tokenizer.eos_token_id
+        max_question_length = 128
 
         encoder_inputs = self.tokenizer.encode_plus(input_text,
                                                     return_tensors="pt",
@@ -483,7 +497,7 @@ class MultitaskGenerator:
         encoder_attention_mask = encoder_inputs["attention_mask"].to(self.device)
 
         decoder_input_ids = torch.tensor([[cls_id]], dtype=torch.long).to(self.device)
-        decoder_attention_mask = torch.tensor([[1]], dtype=torch.long).to(self.device)
+        decoder_attention_mask = torch.tensor([[0]], dtype=torch.long).to(self.device)
 
         question_ids = []
         with torch.no_grad():
@@ -528,11 +542,10 @@ class MultitaskGenerator:
         :param min_ends: 最小结束符号数目
         :return:
         """
-        cls_id = self.tokenizer.cls_token_id
-        sep_id = self.tokenizer.sep_token_id
-        max_question_length = 32
-        max_encoder_length = 128
-
+        cls_id = self.tokenizer.pad_token_id
+        sep_id = self.tokenizer.eos_token_id
+        max_question_length = 256
+        max_encoder_length = 512       
         encoder_inputs = self.tokenizer.encode_plus(input_text,
                                                     return_tensors="pt",
                                                     padding=True,
@@ -543,7 +556,7 @@ class MultitaskGenerator:
         encoder_attention_mask = encoder_inputs["attention_mask"].to(self.device)
 
         decoder_input_ids = torch.tensor([[cls_id]], dtype=torch.long).to(self.device)
-        decoder_attention_mask = torch.tensor([[1]], dtype=torch.long).to(self.device)
+        decoder_attention_mask = torch.tensor([[0]], dtype=torch.long).to(self.device)
 
         # 序列输出得分
         output_scores = torch.tensor(1, dtype=torch.float).to(self.device)
@@ -589,7 +602,7 @@ class MultitaskGenerator:
                     end_idx = torch.argmax(end_logits[best_one]).item()
                     answer = input_text[start_idx - 1:end_idx - 1]
                     question = self.tokenizer.decode(decoder_input_ids[best_one], skip_special_tokens=True)
-                    return {"question": question, "answer": answer}
+                    return question, answer
                 else:
                     # 未达到结束符号序列
                     flag = (end_counts < min_ends)
@@ -607,7 +620,9 @@ class MultitaskGenerator:
         start_idx = torch.argmax(start_logits[best_one]).item()
         end_idx = torch.argmax(end_logits[best_one])[0].item()
         answer = input_text[start_idx - 1:end_idx - 1]
+        print(answer)
         question = self.tokenizer.decode(decoder_input_ids[best_one], skip_special_tokens=True)
+        print(question)
         return question, answer
 
     def random_sample_decode(self, input_text, n, topk=None, topp=None, min_ends=1, min_len=1):
