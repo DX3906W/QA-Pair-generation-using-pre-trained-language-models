@@ -76,8 +76,14 @@ class Trainer:
 
         self.task.train()
 
-    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, saved_dg_model, max_encoder_len, max_decoder_len):
+    def analyze_file_name(self, file_name):
+        return file_name.split('/')[-1].split('.')[0]
+
+    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, saved_dg_model, max_encoder_len,
+                      max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
+        qa_file_name = self.analyze_file_name(saved_ag_model) + '_' + self.analyze_file_name(saved_qg_model) \
+                       + ' ' + self.analyze_file_name(saved_dg_model)
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
@@ -103,13 +109,13 @@ class Trainer:
         path = './benchmark_qa/pipeline/{lm_type}'.format(lm_type=lm_type)
         if not os.path.exists(path):
             os.makedirs(path)
-        with open('{path}/pipeline.txt'.format(path=path), 'w+') as f:
+        with open('{path}/{qa_file_name}.txt'.format(path=path, qa_file_name=qa_file_name), 'w+') as f:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_a, g_q = generator.generate(p)
                 references.append(a + ' ' + q)
                 predictions.append(g_a + ' ' + g_q)
-            
+
                 for _ in range(3):
                     g_d = d_generator.generate(p, g_q, g_a)
                     d_predictions.append(g_d)
@@ -126,10 +132,9 @@ class Trainer:
         print('Generated question and answer evaluation: ', evaluate_metrics(predictions, references))
         print('Generated distractors evaluation: ', evaluate_metrics(d_predictions, d_references))
 
-    def test_multitask(self, lm_type, lm_name, vocab_size, embed_dim, num_heads, saved_model,
-                       saved_dg_model, max_encoder_len):
-        lm = self.lms.get(lm_type)
+    def test_multitask(self, lm_type, lm_name, saved_model, saved_dg_model, max_encoder_len):
         tokenizer = self.tokenizers.get(lm_type)
+        qa_file_name = self.analyze_file_name(saved_model) + '_' + self.analyze_file_name(saved_dg_model)
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
@@ -152,10 +157,9 @@ class Trainer:
         d_predictions = []
         d_references = []
         path = './benchmark_qa/multitask/{lm_type}'.format(lm_type=lm_type)
-        path = './benchmark_qa/pipeline/{lm_type}'.format(lm_type=lm_type)
         if not os.path.exists(path):
             os.makedirs(path)
-        with open('{path}/pipeline.txt'.format(path=path), 'w+') as f:
+        with open('{path}/{qa_file_name}.txt'.format(path=path, qa_file_name=qa_file_name), 'w+') as f:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_a, g_q = generator.generate('beam_search', p)
