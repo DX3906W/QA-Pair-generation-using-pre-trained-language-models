@@ -76,9 +76,11 @@ class AGQGTrainer:
         if self.generation_task == 'answer':
             train_dataset = AGDataset(train_data, self.tokenizer)
             val_dataset = AGDataset(val_data, self.tokenizer)
+            self.test_simple = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
         else:
             train_dataset = QGDataset(train_data, self.tokenizer)
             val_dataset = QGDataset(val_data, self.tokenizer)
+            self.test_simple = 'A model computer can be defined as a machine that stores and manipulates information under the control of a changeable program <sep> computers operate under the control of a machine program'
 
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.batch_size, shuffle=True)
@@ -122,6 +124,12 @@ class AGQGTrainer:
                 loss = outputs[0]
                 if step % 10 == 0:
                     print("Validation Step:{}  Loss:{}".format(step, loss.item()))
+
+                if step % 50 == 0:
+                    input_ids = self.tokenizer(self.test_sample).input_ids
+                    g_p = self.model.generate(input_ids)
+                    print(self.tokenizer.decode(g_p.squeeze().tolist(), skip_special_tokens=True))
+                    
 
     def infer(self, save_predictions=False):
         self.model.eval()
