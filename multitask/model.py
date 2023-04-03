@@ -14,18 +14,29 @@ class MultitaskModel(nn.Module):
         self.vocab_size = vocab_size
         self.decoder_out = nn.Linear(embed_dim, vocab_size)
 
-    def forward(self, encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask):
-        res = self.lm(input_ids=encoder_input_ids,
-                      attention_mask=encoder_attention_mask,
-                      labels=decoder_input_ids,
-                      # decoder_attention_mask=decoder_attention_mask,
-                      return_dict=True,
-                      output_hidden_states=True,)
-        
-        decoder_last_hidden_state = res["decoder_hidden_states"][-1]
-        encoder_last_hidden_state = res["encoder_last_hidden_state"]
-        
-        q = decoder_last_hidden_state[:, -1, :]
+    def forward(self, encoder_input_ids, encoder_attention_mask, decoder_input_ids, mode='train'):
+        if mode == 'train':
+            res = self.lm(input_ids=encoder_input_ids,
+                          attention_mask=encoder_attention_mask,
+                          labels=decoder_input_ids,
+                          return_dict=True,
+                          output_hidden_states=True,)
+            decoder_last_hidden_state = res["decoder_hidden_states"][-1]
+            encoder_last_hidden_state = res["encoder_last_hidden_state"]
+            q = decoder_last_hidden_state[:, -1, :]
+            decoder_loss = res['loss']
+            decoder_out = None
+        else:
+            res = self.lm.generate(input_ids=encoder_input_ids,
+                                   return_dict_in_generate=True,
+                                   output_hidden_states=True,)
+
+            decoder_last_hidden_state = torch.stack(res["decoder_hidden_states"][-1]).squeeze()
+            encoder_last_hidden_state = torch.stack(res["encoder_hidden_states"])[-1].squeeze()
+            q = decoder_last_hidden_state[-1:, :, :]
+            decoder_loss = None
+            decoder_out = res["sequence"]
+
         q = torch.unsqueeze(q, 1)
         k = v = encoder_last_hidden_state
 
@@ -42,10 +53,7 @@ class MultitaskModel(nn.Module):
         end_logits = self.fc_end(encoder_last_hidden_state)
         end_logits = torch.bmm(end_logits, attention_out).squeeze(dim=-1)
 
-        decoder_out = self.decoder_out(decoder_last_hidden_state)
-        decoder_loss = res['loss']
-        decoder_logits = res['logits']
-        return start_logits, end_logits, deocer_logits, decoder_loss
+        return start_logits, end_logits, decoder_loss, decoder_out
 
     def generate_question(self, encoder_input_ids):
         g_q_encode = self.lm.generate(encoder_input_ids)
