@@ -157,11 +157,14 @@ class AGQGTrainer:
 
 
 class PipelineGenerator:
-    def __init__(self, lm_name, tokenizer, saved_ag_model, saved_qg_model, max_encoder_len):
+    def __init__(self, lm_name, tokenizer, saved_ag_model, saved_qg_model, max_encoder_len, max_decoder_len):
         self.ag_model = torch.load(saved_ag_model)['state_dict']
         self.qg_model = torch.load(saved_qg_model)['state_dict']
+        self.ag_model.to('cuda')
+        self.qg_model.to('cuda')
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.max_encoder_len = max_encoder_len
+        self.max_decoder_len = max_decoder_len
 
     def generate(self, p):
         with torch.no_grad():
@@ -170,8 +173,8 @@ class PipelineGenerator:
                                                   padding="max_length",
                                                   truncation=True,
                                                   max_length=self.max_encoder_len)
-            p_input_ids, p_attention_mask = p_encode['input_ids'][0], p_encode['attention_mask'][0]
-            g_a_encode = self.ag_model.generate(p_input_ids, p_attention_mask)
+            p_input_ids = p_encode['input_ids'].to('cuda')
+            g_a_encode = self.ag_model.generate(p_input_ids, max_length=self.max_decoder_len)
             g_a = self.tokenizer.decode(g_a_encode.squeeze().tolist(), skip_special_tokens=True)
 
             pa = p + ' [SEP] ' + g_a
@@ -180,8 +183,8 @@ class PipelineGenerator:
                                                    padding="max_length",
                                                    truncation=True,
                                                    max_length=self.max_encoder_len)
-            pa_input_ids, pa_attention_mask = pa_encode['input_ids'][0], pa_encode['attention_mask'][0]
-            g_q_encode = self.qg_model.generate(pa_input_ids, pa_attention_mask)
+            pa_input_ids = pa_encode['input_ids'].to('cuda')
+            g_q_encode = self.qg_model.generate(pa_input_ids, max_length=self.max_decoder_len)
             g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=True)
 
             return g_a, g_q

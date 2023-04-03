@@ -141,10 +141,12 @@ class DGTrainer:
 
 
 class DistractorGenerator:
-    def __init__(self, lm_name, tokenizer, saved_dg_model, max_encoder_len):
+    def __init__(self, lm_name, tokenizer, saved_dg_model, max_encoder_len, max_decoder_len):
         self.dg_model = torch.load(saved_dg_model)['state_dict']
+        self.dg_model.to('cuda')
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.max_encoder_len = max_encoder_len
+        self.max_decoder_len = max_decoder_len
 
     def generate(self, p, q, a):
         with torch.no_grad():
@@ -154,7 +156,7 @@ class DistractorGenerator:
                                                   padding="max_length",
                                                   truncation=True,
                                                   max_length=self.max_encoder_len)
-            p_input_ids, p_attention_mask = p_encode['input_ids'][0], p_encode['attention_mask'][0]
-            g_a_encode = self.dg_model.generate(p_input_ids, p_attention_mask)
+            p_input_ids = p_encode['input_ids'].to('cuda')
+            g_a_encode = self.dg_model.generate(p_input_ids, max_length=self.max_decoder_len)
             g_d = self.tokenizer.decode(g_a_encode.squeeze().tolist(), skip_special_tokens=True)
             return g_d

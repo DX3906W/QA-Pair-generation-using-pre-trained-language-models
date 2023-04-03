@@ -1,3 +1,4 @@
+import os
 import torch
 
 from data_loader import BenchmarkLoader
@@ -75,7 +76,7 @@ class Trainer:
 
         self.task.train()
 
-    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, saved_dg_model, max_encoder_len):
+    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, saved_dg_model, max_encoder_len, max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
         param_dict = {
             'lm_name': lm_name,
@@ -83,6 +84,7 @@ class Trainer:
             'saved_ag_model': saved_ag_model,
             'saved_qg_model': saved_qg_model,
             'max_encoder_len': max_encoder_len,
+            'max_decoder_len': max_decoder_len,
         }
         generator = PipelineGenerator(**param_dict)
         dg_param_dict = {
@@ -90,6 +92,7 @@ class Trainer:
             'tokenizer': tokenizer,
             'saved_dg_model': saved_dg_model,
             'max_encoder_len': max_encoder_len,
+            'max_decoder_len': max_decoder_len,
         }
         d_generator = DistractorGenerator(**dg_param_dict)
         benchmark_data = BenchmarkLoader().load_data('python_programming.json')
@@ -97,22 +100,26 @@ class Trainer:
         references = []
         d_predictions = []
         d_references = []
+        path = './benchmark_qa/pipeline/{lm_type}'.format(lm_type=lm_type)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        with open('{path}/pipeline.txt'.format(path=path), 'w+') as f:
+            for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
+                                  benchmark_data['question'], benchmark_data['distractor']):
+                g_a, g_q = generator.generate(p)
+                references.append(a + ' ' + q)
+                predictions.append(g_a + ' ' + g_q)
+            
+                for _ in range(3):
+                    g_d = d_generator.generate(p, g_q, g_a)
+                    d_predictions.append(g_d)
+                    d_references.append(d)
 
-        for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
-                              benchmark_data['question'], benchmark_data['distractor']):
-            g_a, g_q = generator.generate(p)
-            references.append(a + ' ' + q)
-            predictions.append(g_a + ' ' + g_q)
-
-            g_d = d_generator.generate(p, g_q, g_a)
-            d_predictions.append(g_d)
-            d_references.append(d)
-
-            with open('../benchmark_qa/pipeline/{lm_name}/pipeline_{saved_ag_model}_{saved_qg_model}.txt'.format(
-                    lm_name=self.lm_name, saved_ag_model=saved_ag_model, saved_qg_model=saved_qg_model), 'a') as f:
                 f.write(p + '\n')
                 f.write(g_q + '\n')
                 f.write(g_a + '\n')
+                for i in range(3, 0, -1):
+                    f.write(d_predictions[-i] + '\n')
                 f.write('\n')
             f.close()
 
@@ -144,6 +151,9 @@ class Trainer:
         references = []
         d_predictions = []
         d_references = []
+        path = './benchmark_qa/multitask/{lm_type}'.format(lm_type=lm_type)
+        if os.path.exists(path):
+            os.makedirs(path)
 
         for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                               benchmark_data['question'], benchmark_data['distractor']):
@@ -155,8 +165,8 @@ class Trainer:
             d_predictions.append(g_d)
             d_references.append(d)
 
-            with open('../benchmark_qa/multi_task/{lm_name}/pipeline_{saved_model}.txt'.format(
-                    lm_name=self.lm_name, saved_model=saved_model, ), 'a') as f:
+            with open('{path}/multitask_{saved_model}.txt'.format(
+                    path=path, saved_model=saved_model, ), 'a') as f:
                 f.write(p + '\n')
                 f.write(g_q + '\n')
                 f.write(g_a + '\n')
@@ -197,10 +207,11 @@ if __name__ == "__main__":
     trainer = Trainer()
     # trainer.train('dgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     trainer.test_pipeline('t5',
-                          't5-small',
-                          'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
-                          'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
-                          'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
+                          't5-base',
+                          'saved_models/pipeline/t5-base/answer_0.pth.tar',
+                          'saved_models/pipeline/t5-base/question_0.pth.tar',
+                          'saved_models/distractor/t5-base/0.pth.tar',
+                          512,
                           512)
     # trainer.test_multitask('t5',
     #                        't5-small',
