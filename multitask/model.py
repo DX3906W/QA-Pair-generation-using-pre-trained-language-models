@@ -22,20 +22,28 @@ class MultitaskModel(nn.Module):
                           return_dict=True,
                           output_hidden_states=True,)
             decoder_last_hidden_state = res["decoder_hidden_states"][-1]
+            # print(torch.stack(res['decoder_hidden_states']).shape)
             encoder_last_hidden_state = res["encoder_last_hidden_state"]
             q = decoder_last_hidden_state[:, -1, :]
+            # print(q.shape)
+            # print(encoder_last_hidden_state.shape)
             decoder_loss = res['loss']
             decoder_out = None
         else:
             res = self.lm.generate(input_ids=encoder_input_ids,
+                                   num_beams=1,
                                    return_dict_in_generate=True,
                                    output_hidden_states=True,)
 
-            decoder_last_hidden_state = torch.stack(res["decoder_hidden_states"][-1]).squeeze()
-            encoder_last_hidden_state = torch.stack(res["encoder_hidden_states"])[-1].squeeze()
-            q = decoder_last_hidden_state[-1:, :, :]
+            decoder_last_hidden_state = torch.stack(res["decoder_hidden_states"][-1]).squeeze(-2)
+            encoder_last_hidden_state = torch.stack(res["encoder_hidden_states"])[-1]
+            # print(len(res['decoder_hidden_states']))
+            # print(torch.stack(res['decoder_hidden_states'][-1]).shape)
+            q = decoder_last_hidden_state[-1, :]
+            # print(q.shape)
+            # print(encoder_last_hidden_state.shape)
             decoder_loss = None
-            decoder_out = res["sequence"]
+            decoder_out = res["sequences"]
 
         q = torch.unsqueeze(q, 1)
         k = v = encoder_last_hidden_state

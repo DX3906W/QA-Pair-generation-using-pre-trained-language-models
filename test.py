@@ -1,9 +1,13 @@
 from transformers import T5Tokenizer, T5ForConditionalGeneration
+from transformers import BartTokenizer, BartForConditionalGeneration
 import torch
 
 
-model = T5ForConditionalGeneration.from_pretrained('t5-small')
-tokenizer = T5Tokenizer.from_pretrained('t5-small')
+# model = T5ForConditionalGeneration.from_pretrained('t5-small')
+# tokenizer = T5Tokenizer.from_pretrained('t5-small')
+
+model = BartForConditionalGeneration.from_pretrained('facebook/bart-base')
+tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
 
 inputs = tokenizer(['Hello, my dog is cute and beautiful and ', 'one for the output of the embeddings'],
                    padding=True,

@@ -68,7 +68,7 @@ class MultitaskTrainer:
 
     def load_model_from_ckpt(self):
         ckpt = torch.load(self.saved_model)
-        self.model.load_state_dict(ckpt['state_dict'])
+        self.model = ckpt['state_dict']
         self.optimizer.load_state_dict(ckpt['state_dict'])
 
     def load_data(self):
@@ -202,9 +202,10 @@ class MultitaskGenerator:
         g_q_encode = self.model.generate_question(p_input_ids)
         g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=True)
 
-        start_logits, end_logits, decoder_logits, _ = self.model(p_input_ids, p_attention_mask, None, None)
+        start_logits, end_logits, decoder_logits, _ = self.model(p_input_ids, p_attention_mask, None, mode='valid')
         start_idx = torch.argmax(start_logits, dim=1)[0].item()
         end_idx = torch.argmax(end_logits, dim=1)[0].item()
-        g_a = passage[start_idx - 1:end_idx - 1]
+        g_a_encode = p_input_ids[0][start_idx:end_idx]
+        g_a = self.tokenizer.decode(g_a_encode)
 
         return g_q, g_a

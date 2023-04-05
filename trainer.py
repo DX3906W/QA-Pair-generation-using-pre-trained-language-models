@@ -54,14 +54,14 @@ class Trainer:
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
             'lambda_p': 0,
-            'batch_size': 8,
+            'batch_size': 16,
             'epochs': 5,
             'lr': 2e-5,
-            'vocab_size': 32100,
-            'embed_dim': 512,
-            'num_heads': 4,
+            'vocab_size': 50265,
+            'embed_dim': 768,
+            'num_heads': 12,
             'dataset': 'processed_squad',
-            'max_encoder_len': 256,
+            'max_encoder_len': 300,
             'max_decoder_len': 128,
             'saved_model': None,
         }
@@ -133,23 +133,24 @@ class Trainer:
         print('Generated question and answer evaluation: ', evaluate_metrics(predictions, references))
         print('Generated distractors evaluation: ', evaluate_metrics(d_predictions, d_references))
 
-    def test_multitask(self, lm_type, lm_name, saved_model, saved_dg_model, max_encoder_len):
+    def test_multitask(self, lm_type, lm_name, saved_model, dg_lm_type, dg_lm_name, saved_dg_model, max_encoder_len, max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
-        qa_file_name = self.analyze_file_name(saved_model) + '_' + self.analyze_file_name(saved_dg_model)
+        qa_file_name = self.analyze_file_name(saved_model) + '_d_' + self.analyze_file_name(saved_dg_model) + lm_name.split('/')[-1]
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
-            'max_encoder_len': 128,
-            'max_decoder_len': 64,
+            'max_encoder_len': max_encoder_len,
+            'max_decoder_len': max_decoder_len,
             'saved_model': saved_model,
         }
         generator = MultitaskGenerator(**param_dict)
+        dg_tokenizer = self.tokenizers.get(dg_lm_type)
         dg_param_dict = {
-            'lm_name': lm_name,
-            'tokenizer': tokenizer,
+            'lm_name': dg_lm_name,
+            'tokenizer': dg_tokenizer,
             'saved_dg_model': saved_dg_model,
             'max_encoder_len': max_encoder_len,
-            'max_decoder_len': 256,
+            'max_decoder_len': max_decoder_len,
         }
         d_generator = DistractorGenerator(**dg_param_dict)
 
@@ -164,7 +165,9 @@ class Trainer:
         with open('{path}/{qa_file_name}.txt'.format(path=path, qa_file_name=qa_file_name), 'w+') as f:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
-                g_a, g_q = generator.generate(passage=p)
+                g_q, g_a = generator.generate(passage=p)
+                # print(g_q)
+                # print(g_a)
                 references.append(a + ' ' + q)
                 predictions.append(g_a + ' ' + g_q)
 
@@ -215,14 +218,18 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer()
-    trainer.train('multitask', 't5', 't5-small')
-    # trainer.test_multitask('t5',
-    #                        't5-base',
-    #                        'saved_models/multitask/t5-base/multi_1.pth.tar',
-    #                        'saved_models/distractor/t5-base/0.pth.tar',
-    #                        512)
-    trainer.test_multitask('t5',
-                           't5-small',
-                           'saved_models/multitask/t5-small/multi_t5-small_0.pth.tar',
-                           'saved_models/pipeline/t5-small/answer_t5-small_0.pth.tar',
-                           512)
+    trainer.train('multitask', 'bart', 'facebook/bart-base')
+    # trainer.test_multitask(lm_type='t5',
+    #                        lm_name='t5-base',
+    #                        saved_model='saved_models/multitask/t5-base/multi_4.pth.tar',
+    #                        saved_dg_model='saved_models/distractor/t5-base/0.pth.tar',
+    #                        max_encoder_len=256,
+    #                        max_decoder_len=128)
+    trainer.test_multitask(lm_type='bart',
+                           lm_name='facebook/bart-base',
+                           saved_model='saved_models/multitask/facebook/bart-large/multi_4.pth.tar',
+                           dg_lm_type='t5',
+                           dg_lm_name='t5-base',
+                           saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
+                           max_encoder_len=256,
+                           max_decoder_len=128)
