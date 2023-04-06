@@ -63,6 +63,3 @@ class MultitaskModel(nn.Module):
 
         return start_logits, end_logits, decoder_loss, decoder_out
 
-    def generate_question(self, encoder_input_ids):
-        g_q_encode = self.lm.generate(encoder_input_ids)
-        return g_q_encode

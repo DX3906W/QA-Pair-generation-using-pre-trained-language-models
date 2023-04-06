@@ -57,13 +57,14 @@ class Trainer:
             'batch_size': 16,
             'epochs': 5,
             'lr': 2e-5,
-            'vocab_size': 50265,
-            'embed_dim': 768,
-            'num_heads': 12,
+            'vocab_size': 30522,
+            'embed_dim': 1024,
+            'num_heads': 8,
             'dataset': 'processed_squad',
             'max_encoder_len': 300,
             'max_decoder_len': 128,
             'saved_model': None,
+            # 'saved_model': './saved_models/multitask/microsoft/prophetnet-large-uncased/multi_0.pth.tar'
         }
         if task_name == 'qgtask':
             task_config['generation_task'] = 'question'
@@ -80,11 +81,11 @@ class Trainer:
     def analyze_file_name(self, file_name):
         return file_name.split('/')[-1].split('.')[0]
 
-    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, saved_dg_model, max_encoder_len,
+    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, dg_lm_type, dg_lm_name, saved_dg_model, max_encoder_len,
                       max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
         qa_file_name = self.analyze_file_name(saved_ag_model) + '_' + self.analyze_file_name(saved_qg_model) \
-                       + 'd_' + self.analyze_file_name(saved_dg_model)
+                       + '_d_' + self.analyze_file_name(saved_dg_model) + '_'  +lm_name.split('/')[0]
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
@@ -93,12 +94,13 @@ class Trainer:
             'max_encoder_len': max_encoder_len,
             'max_decoder_len': max_decoder_len,
         }
+        dg_tokenizer = self.tokenizers.get(dg_lm_type)
         generator = PipelineGenerator(**param_dict)
         dg_param_dict = {
-            'lm_name': lm_name,
-            'tokenizer': tokenizer,
+            'lm_name': dg_lm_name,
+            'tokenizer': dg_tokenizer,
             'saved_dg_model': saved_dg_model,
-            'max_encoder_len': max_encoder_len,
+            'max_encoder_len': 512,
             'max_decoder_len': max_decoder_len,
         }
         d_generator = DistractorGenerator(**dg_param_dict)
@@ -114,6 +116,8 @@ class Trainer:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_a, g_q = generator.generate(p)
+                # print('answer', g_a)
+                # print('question', g_q)
                 references.append(a + ' ' + q)
                 predictions.append(g_a + ' ' + g_q)
 
@@ -135,7 +139,7 @@ class Trainer:
 
     def test_multitask(self, lm_type, lm_name, saved_model, dg_lm_type, dg_lm_name, saved_dg_model, max_encoder_len, max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
-        qa_file_name = self.analyze_file_name(saved_model) + '_d_' + self.analyze_file_name(saved_dg_model) + lm_name.split('/')[-1]
+        qa_file_name = self.analyze_file_name(saved_model) + '_d_' + self.analyze_file_name(saved_dg_model)+ '_' + lm_name.split('/')[-1]
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
@@ -218,18 +222,21 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer()
-    trainer.train('multitask', 'bart', 'facebook/bart-base')
-    # trainer.test_multitask(lm_type='t5',
-    #                        lm_name='t5-base',
-    #                        saved_model='saved_models/multitask/t5-base/multi_4.pth.tar',
-    #                        saved_dg_model='saved_models/distractor/t5-base/0.pth.tar',
+    # trainer.train('multitask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
+    trainer.test_pipeline(lm_type='prophetnet',
+                          lm_name='microsoft/prophetnet-large-uncased',
+                          saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_0.pth.tar',
+                          saved_ag_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/answer_0.pth.tar',
+                          dg_lm_type='t5',
+                          dg_lm_name='t5-base',
+                          saved_dg_model='saved_models/distractor/t5-base/0.pth.tar',
+                          max_encoder_len=256,
+                          max_decoder_len=128)
+    # trainer.test_multitask(lm_type='prophetnet',
+    #                        lm_name='microsoft/prophetnet-large-uncased',
+    #                        saved_model='saved_models/multitask/microsoft/prophetnet-large-uncased/multi_0.pth.tar',
+    #                        dg_lm_type='t5',
+    #                        dg_lm_name='t5-base',
+    #                        saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
     #                        max_encoder_len=256,
     #                        max_decoder_len=128)
-    trainer.test_multitask(lm_type='bart',
-                           lm_name='facebook/bart-base',
-                           saved_model='saved_models/multitask/facebook/bart-large/multi_4.pth.tar',
-                           dg_lm_type='t5',
-                           dg_lm_name='t5-base',
-                           saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
-                           max_encoder_len=256,
-                           max_decoder_len=128)
