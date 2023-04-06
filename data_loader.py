@@ -123,6 +123,66 @@ class SQuADLoader:
             return self.load_from_online()
 
 
+class SQuADLoaderForJoint:
+    def __init__(self):
+        self.squad = load_dataset("squad")
+
+    def load_from_local(self):
+        with open('joint_squad/train_data.json', 'r') as f:
+            train_json = json.load(f)
+
+        with open('joint_squad/test_data.json', 'r') as f:
+            test_json = json.load(f)
+
+        train_contexts, train_questions, train_answers = train_json.values()
+        test_contexts, test_questions, test_answers = test_json.values()
+
+        return list(zip(train_contexts, train_questions, train_answers)), \
+            list(zip(test_contexts, test_questions, test_answers))
+
+    def load_from_online(self):
+        train_squad = self.squad['train']
+        test_squad = self.squad['validation']
+
+        train_contexts = [c.strip() for c in train_squad["context"]]
+        train_questions = [q.strip() for q in train_squad["question"]]
+        train_answers = [a['text'][0].strip() for a in train_squad["answers"]]
+
+        test_contexts = [c.strip() for c in test_squad["context"]]
+        test_questions = [q.strip() for q in test_squad["question"]]
+        test_answers = [a['text'][0].strip() for a in test_squad["answers"]]
+
+        train_data = {
+            'context': train_contexts,
+            'questions': train_questions,
+            'answers': train_answers,
+        }
+        # print(train_data['answer_start'])
+        test_data = {
+            'context': test_contexts,
+            'questions': test_questions,
+            'answers': test_answers,
+        }
+        # print(test_data['answer_start'])
+        train_json = json.dumps(train_data)
+        test_json = json.dumps(test_data)
+
+        with open('joint_squad/train_data.json', 'a') as f:
+            f.write(train_json)
+
+        with open('joint_squad/test_data.json', 'a') as f:
+            f.write(test_json)
+
+        return list(zip(train_contexts, train_questions, train_answers)), \
+            list(zip(test_contexts, test_questions, test_answers))
+
+    def get_data(self):
+        if os.path.exists('joint_squad/train_data.json'):
+            return self.load_from_local()
+        else:
+            return self.load_from_online()
+
+
 class RACELoader:
     def __init__(self):
         self.race = load_dataset("race")

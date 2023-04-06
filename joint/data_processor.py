@@ -3,14 +3,34 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 
-class JointDataset(Dataset):
+class QGKGDataset(Dataset):
     def __init__(self,
-                 data,
+                 datas,
                  tokenizer,
                  max_encoder_len=128,
                  max_decoder_len=64):
-        # a list with triple tuple
-        self.data = data
+        self.datas = datas
+        self.tokenizer = tokenizer
+
+        self.max_encoder_len = max_encoder_len
+        self.max_decoder_len = max_decoder_len
+
+    def __len__(self):
+        return len(self.datas)
+
+    def __getitem__(self, index):
+        passage, question, answer = self.datas[index]
+
+        return passage, question, answer
+
+
+class AGDataset(Dataset):
+    def __init__(self,
+                 datas,
+                 tokenizer,
+                 max_encoder_len=128,
+                 max_decoder_len=64):
+        self.datas = datas
         self.tokenizer = tokenizer
 
         self.max_encoder_len = max_encoder_len
@@ -22,9 +42,6 @@ class JointDataset(Dataset):
     def __getitem__(self, index):
         p, q, a = self.datas[index]
 
-        # print(p, q, a)
-        start_idx = p.index(a) + 1
-        end_idx = start_idx + len(a)
         encoder_inputs = self.tokenizer.encode_plus(p,
                                                     return_tensors="pt",
                                                     padding="max_length",
@@ -45,8 +62,5 @@ class JointDataset(Dataset):
 
         decoder_attention_mask = decoder_inputs["attention_mask"][0][:-1]
 
-        start_idx = torch.tensor(start_idx, dtype=torch.long)
-        end_idx = torch.tensor(end_idx, dtype=torch.long)
-
-        return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask, \
-            start_idx, end_idx, decoder_output_ids
+        return encoder_input_ids, encoder_attention_mask, \
+            decoder_input_ids, decoder_attention_mask, decoder_output_ids

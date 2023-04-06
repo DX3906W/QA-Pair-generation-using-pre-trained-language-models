@@ -21,6 +21,7 @@ class MultitaskModel(nn.Module):
                           labels=decoder_input_ids,
                           return_dict=True,
                           output_hidden_states=True,)
+            # dim [batch_size, seq_len, embed_dim]
             decoder_last_hidden_state = res["decoder_hidden_states"][-1]
             # print(torch.stack(res['decoder_hidden_states']).shape)
             encoder_last_hidden_state = res["encoder_last_hidden_state"]
@@ -53,16 +54,17 @@ class MultitaskModel(nn.Module):
         v = torch.transpose(v, 0, 1)
 
         attention_out, attention_weight = self.attention(q, k, v)
+        # dim [batch_size, embed_dim, 1]
         attention_out = attention_out.permute(1, 2, 0)
 
+        # dim [batch_size, seq_len, embed_dim]
         start_logits = self.fc_start(encoder_last_hidden_state)
+        # dim [batch_size, seq_len]
         start_logits = torch.bmm(start_logits, attention_out).squeeze(dim=-1)
 
+        # dim [batch_size, seq_len, embed_dim]
         end_logits = self.fc_end(encoder_last_hidden_state)
+        # dim [batch_size, seq_len]
         end_logits = torch.bmm(end_logits, attention_out).squeeze(dim=-1)
 
         return start_logits, end_logits, decoder_loss, decoder_out
-
-    def generate_question(self, encoder_input_ids):
-        g_q_encode = self.lm.generate(encoder_input_ids)
-        return g_q_encode

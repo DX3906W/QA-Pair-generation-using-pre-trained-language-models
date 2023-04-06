@@ -1,8 +1,6 @@
-import os
 import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW
-from transformers import AutoTokenizer
 
 from data_loader import *
 from .data_processor import AGDataset, QGDataset
@@ -31,7 +29,7 @@ class AGQGTrainer:
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         lm_vocab_path = './{lm_name}_vocab'.format(lm_name=lm_name)
         if not os.path.exists(lm_vocab_path):
-            os.mkdirs(lm_vocab_path)
+            os.makedirs(lm_vocab_path)
         self.tokenizer.save_pretrained(lm_vocab_path)
         print('vocab size: ', self.tokenizer.vocab_size)
         print('special tokens: ', self.tokenizer.all_special_tokens)
@@ -76,11 +74,14 @@ class AGQGTrainer:
         if self.generation_task == 'answer':
             train_dataset = AGDataset(train_data, self.tokenizer)
             val_dataset = AGDataset(val_data, self.tokenizer)
-            self.test_simple = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
+            self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information ' \
+                               'under the control of a  changeable program. '
         else:
             train_dataset = QGDataset(train_data, self.tokenizer)
             val_dataset = QGDataset(val_data, self.tokenizer)
-            self.test_simple = 'A model computer can be defined as a machine that stores and manipulates information under the control of a changeable program <sep> computers operate under the control of a machine program'
+            self.test_simple = 'A model computer can be defined as a machine that stores and manipulates information ' \
+                               'under the control of a changeable program <sep> computers operate under the control ' \
+                               'of a machine program '
 
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.batch_size, shuffle=True)
@@ -160,8 +161,9 @@ class PipelineGenerator:
     def __init__(self, lm_name, tokenizer, saved_ag_model, saved_qg_model, max_encoder_len, max_decoder_len):
         self.ag_model = torch.load(saved_ag_model)['state_dict']
         self.qg_model = torch.load(saved_qg_model)['state_dict']
-        self.ag_model.to('cuda')
-        self.qg_model.to('cuda')
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.ag_model.to(self.device)
+        self.qg_model.to(self.device)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len

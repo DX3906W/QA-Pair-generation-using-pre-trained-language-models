@@ -5,6 +5,7 @@ from data_loader import BenchmarkLoader
 from multitask.trainer import MultitaskTrainer, MultitaskGenerator
 from pipeline.trainer import AGQGTrainer, PipelineGenerator
 from distractor.trainer import DGTrainer, DistractorGenerator
+from joint.trainer import QGKGTrainer, AGTrainer, QGKGGenerator, AGGenerator
 
 from transformers import T5Model, ProphetNetModel, BartModel
 from transformers import T5Config, ProphetNetConfig, BartConfig
@@ -20,6 +21,8 @@ class Trainer:
             'qgtask': AGQGTrainer,
             'agtask': AGQGTrainer,
             'dgtask': DGTrainer,
+            'agkgtask': QGKGTrainer,
+            'j_agtask': AGTrainer
         }
         self.lms = {
             't5': T5Model,
@@ -54,7 +57,7 @@ class Trainer:
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
             'lambda_p': 0,
-            'batch_size': 16,
+            'batch_size': 8,
             'epochs': 5,
             'lr': 2e-5,
             'vocab_size': 50265,
@@ -218,13 +221,7 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer()
-    trainer.train('multitask', 'bart', 'facebook/bart-base')
-    # trainer.test_multitask(lm_type='t5',
-    #                        lm_name='t5-base',
-    #                        saved_model='saved_models/multitask/t5-base/multi_4.pth.tar',
-    #                        saved_dg_model='saved_models/distractor/t5-base/0.pth.tar',
-    #                        max_encoder_len=256,
-    #                        max_decoder_len=128)
+    trainer.train(task_name='agkgtask', lm_type='t5', lm_name='t5-small')
     trainer.test_multitask(lm_type='bart',
                            lm_name='facebook/bart-base',
                            saved_model='saved_models/multitask/facebook/bart-large/multi_4.pth.tar',
