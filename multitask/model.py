@@ -68,3 +68,4 @@ class MultitaskModel(nn.Module):
         end_logits = torch.bmm(end_logits, attention_out).squeeze(dim=-1)
 
         return start_logits, end_logits, decoder_loss, decoder_out
+

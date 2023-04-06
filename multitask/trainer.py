@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torch.nn import CrossEntropyLoss
 from data_loader import *
 from utils import evaluate_metrics
-
+from torch.nn.functional import softmax
 
 class MultitaskTrainer:
     def __init__(self,
@@ -67,9 +67,10 @@ class MultitaskTrainer:
         self.load_data()
 
     def load_model_from_ckpt(self):
+        print('load model from checkpoint')
         ckpt = torch.load(self.saved_model)
         self.model = ckpt['state_dict']
-        self.optimizer.load_state_dict(ckpt['state_dict'])
+        self.optimizer = ckpt['optimizer']
 
     def load_data(self):
         if 'processed_squad' in self.dataset:
@@ -90,13 +91,13 @@ class MultitaskTrainer:
 
     def train(self):
         self.model.train()
-        for epoch in range(self.epochs):
+        for epoch in range(1, self.epochs):
             if epoch == 0:
-                self.lambda_p = 1
-            elif epoch == 1:
                 self.lambda_p = 0
-            elif epoch == 2:
+            elif epoch == 1:
                 self.lambda_p = 0.5
+            elif epoch == 2:
+                self.lambda_p = 0.2
             else:
                 self.lambda_p = 0.2
             for step, data in enumerate(self.train_dataloader):
@@ -199,12 +200,19 @@ class MultitaskGenerator:
                                               max_length=self.max_encoder_len)
         p_input_ids = p_inputs['input_ids'].to(self.device)
         p_attention_mask = p_inputs['attention_mask'].to(self.device)
-        g_q_encode = self.model.generate_question(p_input_ids)
-        g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=True)
+        # g_q_encode = self.model.generate_question(p_input_ids)
+        # g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=True)
 
-        start_logits, end_logits, decoder_logits, _ = self.model(p_input_ids, p_attention_mask, None, mode='valid')
-        start_idx = torch.argmax(start_logits, dim=1)[0].item()
-        end_idx = torch.argmax(end_logits, dim=1)[0].item()
+        start_logits, end_logits, _, decoder_out = self.model(p_input_ids, p_attention_mask, None, mode='valid')
+        start_idx = torch.argmax(softmax(start_logits, dim=1), dim=1)[0].item()
+        end_idx = torch.argmax(softmax(end_logits, dim=1), dim=1)[0].item()
+        if start_idx > end_idx:
+            temp = start_idx
+            start_idx = end_idx
+            end_idx = temp
+        # print(start_idx, end_idx)
+        g_q = self.tokenizer.decode(decoder_out.squeeze().tolist(), skip_special_tokens=True)
+        # print(g_q)
         g_a_encode = p_input_ids[0][start_idx:end_idx]
         g_a = self.tokenizer.decode(g_a_encode)
 

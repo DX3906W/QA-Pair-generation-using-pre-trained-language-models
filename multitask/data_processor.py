@@ -20,7 +20,7 @@ class MultitaskDataset(Dataset):
 
     def __getitem__(self, index):
         p, q, a, answer_index = self.datas[index]
-        mask_p = p[:answer_index] + ' <mask> ' + p[answer_index:answer_index + len(a)] + ' <mask> ' + \
+        mask_p = p[:answer_index] + ' [MASK] ' + p[answer_index:answer_index + len(a)] + ' [MASK] ' + \
                  p[answer_index + len(a):]
         encoder_inputs = self.tokenizer.encode_plus(p,
                                                     return_tensors="pt",
