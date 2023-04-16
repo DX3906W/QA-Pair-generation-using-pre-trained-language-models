@@ -2,6 +2,7 @@ import codecs
 import json
 import os
 from nltk import tokenize
+from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -148,40 +149,48 @@ class SQuADLoaderForJoint:
         train_contexts = [c.strip() for c in train_squad["context"]]
         train_questions = [q.strip() for q in train_squad["question"]]
         train_answers = [a['text'][0].strip() for a in train_squad["answers"]]
+        index = 0
+        train_data = []
+        for i in tqdm(range(1, len(train_squad["context"]))):
+            if train_contexts[i] != train_contexts[i-1]:
+                train_data.append({'context': train_contexts[index], 'questions': train_questions[index:i],
+                                   'answers': train_answers[index:i]})
+        train_data.append({'context': train_contexts[index], 'questions': train_questions[index:len(train_contexts)],
+                           'answers': train_answers[index:len(train_contexts)]})
+        train_contexts = []
+        train_questions = []
+        train_answers = []
+        train_json = json.dumps(train_data, indent=3)
+        with open('joint_squad/train_data.json', 'a') as f:
+            f.write(train_json)
+        train_data = []
 
         test_contexts = [c.strip() for c in test_squad["context"]]
         test_questions = [q.strip() for q in test_squad["question"]]
         test_answers = [a['text'][0].strip() for a in test_squad["answers"]]
+        index = 0
+        test_data = []
 
-        train_data = {
-            'context': train_contexts,
-            'questions': train_questions,
-            'answers': train_answers,
-        }
-        # print(train_data['answer_start'])
-        test_data = {
-            'context': test_contexts,
-            'questions': test_questions,
-            'answers': test_answers,
-        }
-        # print(test_data['answer_start'])
-        train_json = json.dumps(train_data)
-        test_json = json.dumps(test_data)
+        for i in tqdm(range(1, len(test_contexts))):
+            if test_contexts[i] != test_contexts[i-1]:
+                test_data.append({'context': test_contexts[index], 'questions': test_questions[index:i],
+                                   'answers': test_answers[index:i]})
+        test_data.append(
+            {'context': test_contexts[index], 'questions': test_questions[index:len(test_contexts)],
+             'answers': test_answers[index:len(test_contexts)]})
+        test_contexts = []
+        test_questions = []
+        test_answers = []
 
-        with open('joint_squad/train_data.json', 'a') as f:
-            f.write(train_json)
-
+        test_json = json.dumps(test_data, indent=3)
         with open('joint_squad/test_data.json', 'a') as f:
             f.write(test_json)
-
-        return list(zip(train_contexts, train_questions, train_answers)), \
-            list(zip(test_contexts, test_questions, test_answers))
+        del test_data[:]
 
     def get_data(self):
-        if os.path.exists('joint_squad/train_data.json'):
-            return self.load_from_local()
-        else:
-            return self.load_from_online()
+        if not os.path.exists('joint_squad/train_data.json'):
+            self.load_from_online()
+        return self.load_from_local()
 
 
 class RACELoader:

@@ -145,18 +145,19 @@ class QGKGTrainer:
             for step, data in enumerate(self.train_dataloader):
                 passage, question, answer = data
                 for iter in range(10):
+                    print(iter)
                     if iter == 0:
-                        encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None)
-                        # print(encoder_input_ids.device)
-                        _, k_encode = self.kg_model(encoder_input_ids,
-                                                    encoder_attention_mask,
-                                                    decoder_input_ids=None,
-                                                    question_hidden_state=None,
-                                                    mode='infer')
-                        keyphrase = self._decode_output(k_encode)
+                        with torch.no_grad():
+                            encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None)
+                            _, k_encode = self.kg_model(encoder_input_ids,
+                                                        encoder_attention_mask,
+                                                        decoder_input_ids=None,
+                                                        question_hidden_state=None,
+                                                        mode='infer')
+                            # k_encode = k_encode.detach()
+                            keyphrase = self._decode_output(k_encode)
 
                     self.qg_optimizer.zero_grad()
-                    self.kg_optimizer.zero_grad()
                     encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_qg(
                         keyphrase, passage, question)
                     decoder_last_hidden_state, qg_loss, decoder_out = self.qg_model(
@@ -167,16 +168,16 @@ class QGKGTrainer:
                     qg_loss.backward()
                     self.qg_optimizer.step()
 
+                    self.kg_optimizer.zero_grad()
                     encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_kg(
                         keyphrase, passage)
                     kg_loss, decoder_out = self.kg_model(
                         encoder_input_ids,
                         encoder_attention_mask,
                         decoder_input_ids,
-                        decoder_last_hidden_state,
+                        decoder_last_hidden_state.detach(),
                         mode='train')
                     keyphrase = self._decode_output(decoder_out)
-
                     kg_loss.backward()
                     self.kg_optimizer.step()
 
