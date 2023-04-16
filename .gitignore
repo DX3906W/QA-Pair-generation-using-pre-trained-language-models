@@ -5,4 +5,8 @@ benchmark_dataset/*
 processed_squad/*
 *.pyc
 *.json
-t5-base/
+t5-base_vocab/
+t5-small_vocab/
+facebook/
+microsoft/
+joint_squad

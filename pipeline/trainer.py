@@ -27,14 +27,17 @@ class AGQGTrainer:
                  generation_task='answer',
                  ):
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.model = generative_lm.from_pretrained(lm_name)
         lm_vocab_path = './{lm_name}_vocab'.format(lm_name=lm_name)
         if not os.path.exists(lm_vocab_path):
             os.makedirs(lm_vocab_path)
+        if 't5' in lm_name:
+            self.tokenizer.add_special_tokens({'sep_token': '<sep>'})
         self.tokenizer.save_pretrained(lm_vocab_path)
         print('vocab size: ', self.tokenizer.vocab_size)
         print('special tokens: ', self.tokenizer.all_special_tokens)
         self.generation_task = generation_task
-        self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
+        self.benchmark_data = BenchmarkLoader().load_data('python_programming.json')
         # print(self.benchmark_data)
 
         self.lm_name = lm_name
@@ -51,7 +54,8 @@ class AGQGTrainer:
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.model = generative_lm.from_pretrained(lm_name)
+        # self.model = generative_lm.from_pretrained(lm_name)
+        self.model.save_pretrained(lm_vocab_path)
         self.optimizer = AdamW(params=self.model.parameters(), lr=self.lr)
         if self.saved_model is not None:
             self.load_model_from_ckpt()
@@ -61,8 +65,8 @@ class AGQGTrainer:
 
     def load_model_from_ckpt(self):
         ckpt = torch.load(self.saved_model)
-        self.model.load_state_dict(ckpt['state_dict'])
-        self.optimizer.load_state_dict(ckpt['state_dict'])
+        self.model = ckpt['state_dict']
+        self.optimizer = ckpt['optimizer']
 
     def load_data(self):
         if 'processed_squad' in self.dataset:
@@ -74,7 +78,7 @@ class AGQGTrainer:
         if self.generation_task == 'answer':
             train_dataset = AGDataset(train_data, self.tokenizer)
             val_dataset = AGDataset(val_data, self.tokenizer)
-            self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information ' \
+            self.test_simple = 'A modern computer can be defined as a machine that stores and manipulates information ' \
                                'under the control of a  changeable program. '
         else:
             train_dataset = QGDataset(train_data, self.tokenizer)
@@ -88,7 +92,7 @@ class AGQGTrainer:
 
     def train(self):
         self.model.train()
-        for epoch in range(self.epochs):
+        for epoch in range(3, 3+self.epochs):
             for step, data in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
                 batch = [d.to(self.device) for d in data]
@@ -110,8 +114,8 @@ class AGQGTrainer:
             torch.save({'state_dict': self.model, 'optimizer': self.optimizer},
                        '{path}/{generation_task}_{epoch}.pth.tar'.format(
                            path=path, generation_task=self.generation_task, epoch=epoch))
-            self.validate()
-            print(self.infer())
+            # self.validate()
+            # print(self.infer())
 
     def validate(self):
         self.model.eval()
@@ -127,7 +131,7 @@ class AGQGTrainer:
                     print("Validation Step:{}  Loss:{}".format(step, loss.item()))
 
                 if step % 50 == 0:
-                    input_ids = self.tokenizer(self.test_sample).input_ids
+                    input_ids = self.tokenizer(self.test_simple).input_ids
                     g_p = self.model.generate(input_ids)
                     print(self.tokenizer.decode(g_p.squeeze().tolist(), skip_special_tokens=True))
                     

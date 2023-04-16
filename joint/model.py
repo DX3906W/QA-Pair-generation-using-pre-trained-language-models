@@ -37,18 +37,6 @@ class QuestionGenerationModel(nn.Module):
         return decoder_last_hidden_state, decoder_loss, decoder_out
 
 
-class KeyphraseGenerationEmbeddingLayer(nn.Module):
-    def __init__(self, lm_embedding_layer):
-        super().__init__()
-        self.lm_embedding_layer = lm_embedding_layer
-
-    def forward(self, input_text, last_decoder_hidden_state):
-        input_embeddings = self.lm_embedding_layer(input_text)
-        concat_embedding = torch.cat([last_decoder_hidden_state, input_embeddings], dim=0)
-
-        return concat_embedding
-
-
 class KeyphraseGenerationModel(nn.Module):
     def __init__(self, lm, lm_name):
         super().__init__()
@@ -59,7 +47,11 @@ class KeyphraseGenerationModel(nn.Module):
                 question_hidden_state, mode='train'):
         inputs_embeds = self.embedding_layer(encoder_input_ids)
         if question_hidden_state is not None:
-            inputs_embeds = torch.cat([question_hidden_state, inputs_embeds], dim=2)
+            # dim: [batch_size, seq_len, embed_dim]
+            # print(question_hidden_state.shape)
+            # print(inputs_embeds.shape)
+            inputs_embeds = torch.add(question_hidden_state, inputs_embeds)
+            # print(inputs_embeds.shape)
         if mode == 'train':
             res = self.kg_model(inputs_embeds=inputs_embeds,
                                 attention_mask=encoder_attention_mask,

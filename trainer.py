@@ -21,7 +21,7 @@ class Trainer:
             'qgtask': AGQGTrainer,
             'agtask': AGQGTrainer,
             'dgtask': DGTrainer,
-            'agkgtask': QGKGTrainer,
+            'qgkgtask': QGKGTrainer,
             'j_agtask': AGTrainer
         }
         self.lms = {
@@ -64,9 +64,11 @@ class Trainer:
             'embed_dim': 768,
             'num_heads': 12,
             'dataset': 'processed_squad',
+            # 'dataset': 'race',
             'max_encoder_len': 300,
             'max_decoder_len': 128,
-            'saved_model': None,
+            # 'saved_model': None,
+            # 'saved_model': './saved_models/pipeline/microsoft/prophetnet-large-uncased/question_2.pth.tar',
             # 'saved_model': './saved_models/multitask/microsoft/prophetnet-large-uncased/multi_0.pth.tar'
         }
         if task_name == 'qgtask':
@@ -223,14 +225,15 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer()
-    # trainer.train('multitask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
+    # trainer.train('qgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
+    trainer.train('qgkgtask', 't5', 't5-small')
     trainer.test_pipeline(lm_type='prophetnet',
                           lm_name='microsoft/prophetnet-large-uncased',
-                          saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_0.pth.tar',
-                          saved_ag_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/answer_0.pth.tar',
+                          saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_3.pth.tar',
+                          saved_ag_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/answer_2.pth.tar',
                           dg_lm_type='t5',
                           dg_lm_name='t5-base',
-                          saved_dg_model='saved_models/distractor/t5-base/0.pth.tar',
+                          saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
                           max_encoder_len=256,
                           max_decoder_len=128)
     # trainer.test_multitask(lm_type='prophetnet',

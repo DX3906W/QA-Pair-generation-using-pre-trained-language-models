@@ -64,7 +64,7 @@ class QGDataset(Dataset):
                                               padding="max_length",
                                               truncation=True,
                                               max_length=self.max_encoder_len)
-
+        
         pa_input_ids = pa_inputs["input_ids"][0]
         pa_attention_mask = pa_inputs["attention_mask"][0]
 

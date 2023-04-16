@@ -6,6 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from datasets import load_dataset
+from tqdm import tqdm
 
 
 class SQuADLoader:
@@ -185,22 +186,26 @@ class SQuADLoaderForJoint:
 
 class RACELoader:
     def __init__(self):
-        self.race = load_dataset("race")
+        self.race = load_dataset("race", "all")
+        self.ans_2_idx = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
 
     def get_data(self):
         train_race = self.race['train']
         test_race = self.race['validation']
 
-        train_contexts = [c.strip() for c in train_race["context"]]
+        train_contexts = [c.strip() for c in train_race["article"]]
         train_questions = [q.strip() for q in train_race["question"]]
-        train_answers = [a.strip() for a in train_race["answer"]]
+        train_answers = [o[self.ans_2_idx[a]] for a, o in zip(train_race['answer'], train_race['options'])]
 
-        test_contexts = [c.strip() for c in test_race["context"]]
+        test_contexts = [c.strip() for c in test_race["article"]]
         test_questions = [q.strip() for q in test_race["question"]]
-        test_answers = [a.strip() for a in test_race["answer"]]
+        test_answers = [o[self.ans_2_idx[a]] for a, o in zip(test_race['answer'], test_race['options'])]
 
-        return list(zip(train_contexts, train_questions, train_answers)), \
-            list(zip(test_contexts, test_questions, test_answers))
+        train_placeholder = [None] * len(train_contexts)
+        test_placeholder = [None] * len(test_contexts)
+
+        return list(zip(train_contexts, train_questions, train_answers, train_placeholder)), \
+            list(zip(test_contexts, test_questions, test_answers, train_placeholder))
 
 
 class DGRACELoader:

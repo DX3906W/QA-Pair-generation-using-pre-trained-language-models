@@ -67,7 +67,7 @@ class QGKGTrainer:
     def load_model_from_ckpt(self):
         ckpt = torch.load(self.saved_model)
         self.model = ckpt['state_dict']
-        self.qg_optimizer.load_state_dict(ckpt['state_dict'])
+        self.qg_optimizer = ckpt['optimizer']
 
     def load_data(self):
         if 'processed_squad' in self.dataset:
@@ -90,9 +90,9 @@ class QGKGTrainer:
             truncation=True,
             max_length=self.max_encoder_len
         )
-        encoder_input_ids = encoder_inputs["input_ids"]
-        encoder_attention_mask = encoder_inputs["attention_mask"]
-
+        encoder_input_ids = encoder_inputs["input_ids"].to(self.device)
+        encoder_attention_mask = encoder_inputs["attention_mask"].to(self.device)
+        
         if keyphrase is None:
             return encoder_input_ids, encoder_attention_mask, None, None
 
@@ -103,14 +103,9 @@ class QGKGTrainer:
             truncation=True,
             max_length=self.max_encoder_len
         )
-        decoder_input_ids = decoder_inputs["input_ids"]
-        decoder_attention_mask = decoder_inputs["attention_mask"]
-
-        encoder_input_ids = encoder_input_ids.to(self.device)
-        encoder_attention_mask = encoder_attention_mask.to(self.device)
-        decoder_input_ids = decoder_input_ids.to(self.device)
-        decoder_attention_mask = decoder_attention_mask.to(self.device)
-
+        decoder_input_ids = decoder_inputs["input_ids"].to(self.device)
+        decoder_attention_mask = decoder_inputs["attention_mask"].to(self.device)
+        
         return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask
 
     def _prepare_input_for_qg(self, keyphrase, passage, question):
@@ -124,8 +119,8 @@ class QGKGTrainer:
             truncation=True,
             max_length=self.max_encoder_len
         )
-        encoder_input_ids = encoder_inputs["input_ids"]
-        encoder_attention_mask = encoder_inputs["attention_mask"]
+        encoder_input_ids = encoder_inputs["input_ids"].to(self.device)
+        encoder_attention_mask = encoder_inputs["attention_mask"].to(self.device)
 
         decoder_inputs = self.tokenizer(
             question,
@@ -134,17 +129,13 @@ class QGKGTrainer:
             truncation=True,
             max_length=self.max_encoder_len
         )
-        decoder_input_ids = decoder_inputs["input_ids"]
-        decoder_attention_mask = decoder_inputs["attention_mask"]
-
-        encoder_input_ids = encoder_input_ids.to(self.device)
-        encoder_attention_mask = encoder_attention_mask.to(self.device)
-        decoder_input_ids = decoder_input_ids.to(self.device)
-        decoder_attention_mask = decoder_attention_mask.to(self.device)
+        decoder_input_ids = decoder_inputs["input_ids"].to(self.device)
+        decoder_attention_mask = decoder_inputs["attention_mask"].to(self.device)
 
         return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask
 
     def _decode_output(self, output_encode):
+        print(output_encode.shape)
         return self.tokenizer.batch_decode(output_encode, skip_special_tokens=True)
 
     def train(self):
@@ -156,6 +147,7 @@ class QGKGTrainer:
                 for iter in range(10):
                     if iter == 0:
                         encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None)
+                        # print(encoder_input_ids.device)
                         _, k_encode = self.kg_model(encoder_input_ids,
                                                     encoder_attention_mask,
                                                     decoder_input_ids=None,
