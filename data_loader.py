@@ -2,6 +2,7 @@ import codecs
 import json
 import os
 from nltk import tokenize
+import pandas as pd
 from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -142,55 +143,20 @@ class SQuADLoaderForJoint:
         return list(zip(train_contexts, train_questions, train_answers)), \
             list(zip(test_contexts, test_questions, test_answers))
 
-    def load_from_online(self):
-        train_squad = self.squad['train']
-        test_squad = self.squad['validation']
-
-        train_contexts = [c.strip() for c in train_squad["context"]]
-        train_questions = [q.strip() for q in train_squad["question"]]
-        train_answers = [a['text'][0].strip() for a in train_squad["answers"]]
-        index = 0
-        train_data = []
-        for i in tqdm(range(1, len(train_squad["context"]))):
-            if train_contexts[i] != train_contexts[i-1]:
-                train_data.append({'context': train_contexts[index], 'questions': train_questions[index:i],
-                                   'answers': train_answers[index:i]})
-        train_data.append({'context': train_contexts[index], 'questions': train_questions[index:len(train_contexts)],
-                           'answers': train_answers[index:len(train_contexts)]})
-        train_contexts = []
-        train_questions = []
-        train_answers = []
-        train_json = json.dumps(train_data, indent=3)
-        with open('joint_squad/train_data.json', 'a') as f:
-            f.write(train_json)
-        train_data = []
-
-        test_contexts = [c.strip() for c in test_squad["context"]]
-        test_questions = [q.strip() for q in test_squad["question"]]
-        test_answers = [a['text'][0].strip() for a in test_squad["answers"]]
-        index = 0
-        test_data = []
-
-        for i in tqdm(range(1, len(test_contexts))):
-            if test_contexts[i] != test_contexts[i-1]:
-                test_data.append({'context': test_contexts[index], 'questions': test_questions[index:i],
-                                   'answers': test_answers[index:i]})
-        test_data.append(
-            {'context': test_contexts[index], 'questions': test_questions[index:len(test_contexts)],
-             'answers': test_answers[index:len(test_contexts)]})
-        test_contexts = []
-        test_questions = []
-        test_answers = []
-
-        test_json = json.dumps(test_data, indent=3)
-        with open('joint_squad/test_data.json', 'a') as f:
-            f.write(test_json)
-        del test_data[:]
-
     def get_data(self):
-        if not os.path.exists('joint_squad/train_data.json'):
-            self.load_from_online()
-        return self.load_from_local()
+        train_squad = pd.DataFrame(self.squad['train'])
+        train_squad = train_squad.drop(columns=['id', 'title'])
+        train_squad['answers'] = train_squad['answers'].map(lambda x: x['text'][0])
+        train_squad['context'] = train_squad['context'].map(lambda x: x.strip())
+        train_squad_group = train_squad.groupby('context').agg(lambda x: ' <sep> '.join(x)).reset_index()
+
+        test_squad = pd.DataFrame(self.squad['validation'])
+        test_squad = test_squad.drop(columns=['id', 'title'])
+        test_squad['answers'] = test_squad['answers'].map(lambda x: x['text'][0])
+        test_squad['context'] = test_squad['context'].map(lambda x: x.strip())
+        test_squad_group = test_squad.groupby('context').agg(lambda x: ' <sep> '.join(x)).reset_index()
+
+        return train_squad_group, test_squad_group
 
 
 class RACELoader:

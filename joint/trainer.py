@@ -95,6 +95,7 @@ class QGKGTrainer:
         
         if keyphrase is None:
             return encoder_input_ids, encoder_attention_mask, None, None
+        keyphrase.replace('<sep>', self.tokenizer.cls_token)
 
         decoder_inputs = self.tokenizer(
             keyphrase,
@@ -122,6 +123,7 @@ class QGKGTrainer:
         encoder_input_ids = encoder_inputs["input_ids"].to(self.device)
         encoder_attention_mask = encoder_inputs["attention_mask"].to(self.device)
 
+        question.replace('<sep>', self.tokenizer.cls_token)
         decoder_inputs = self.tokenizer(
             question,
             return_tensors="pt",

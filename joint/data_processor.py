@@ -16,10 +16,10 @@ class QGKGDataset(Dataset):
         self.max_decoder_len = max_decoder_len
 
     def __len__(self):
-        return len(self.datas)
+        return self.datas.shape[0]
 
     def __getitem__(self, index):
-        passage, question, answer = self.datas[index]
+        passage, question, answer = self.datas.iloc[index]
 
         return passage, question, answer
 
