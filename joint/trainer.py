@@ -60,7 +60,7 @@ class QGKGTrainer:
         self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
         # if self.saved_model is not None:
-        self.load_model_from_ckpt()
+        # self.load_model_from_ckpt()
         self.qg_model.to(self.device)
         self.kg_model.to(self.device)
 
@@ -145,14 +145,16 @@ class QGKGTrainer:
 
     def _decode_output(self, output_encode):
         # print(output_encode.shape)
-        return self.tokenizer.batch_decode(output_encode, skip_special_tokens=True)
+        decode_text = self.tokenizer.batch_decode(output_encode, skip_special_tokens=False)
+        decode_text = [text.replace(self.tokenizer.pad_token, '').replace(self.tokenizer.eos_token, '').replace(self.tokenizer.unk_token, '') for text in decode_text]
+        return decode_text
 
     def train(self):
         self.kg_model.train()
         self.qg_model.train()
         for epoch in range(self.epochs):
             for step, data in enumerate(self.train_dataloader):
-                real_step = 1500 + step
+                real_step = step
                 passage, question, answer = data
                 for iter in range(5):
                     if iter == 0:
