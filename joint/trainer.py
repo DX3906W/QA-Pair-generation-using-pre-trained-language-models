@@ -28,13 +28,16 @@ class QGKGTrainer:
                  generation_task='answer',
                  ):
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.decode_tokenizer = tokenizer.from_pretrained(lm_name)
         lm_vocab_path = './{lm_name}_vocab'.format(lm_name=lm_name)
         if not os.path.exists(lm_vocab_path):
             os.makedirs(lm_vocab_path)
         if 't5' in lm_name:
-            self.tokenizer.add_special_tokens({'cls_token': "<cls>"})
+            self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
         elif 'prophetnet' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
+        elif 'bart' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
 
         self.tokenizer.save_pretrained(lm_vocab_path)
         print('vocab size: ', self.tokenizer.vocab_size)
@@ -145,9 +148,9 @@ class QGKGTrainer:
 
     def _decode_output(self, output_encode):
         # print(output_encode.shape)
-        decode_text = self.tokenizer.batch_decode(output_encode, skip_special_tokens=False)
-        decode_text = [text.replace(self.tokenizer.pad_token, '').replace(self.tokenizer.eos_token, '').replace(self.tokenizer.unk_token, '') for text in decode_text]
-        return decode_text
+        batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
+        batch_decoded = [text.replace('cls>', '<cls>') for text in batch_decoded]
+        return batch_decoded
 
     def train(self):
         self.kg_model.train()
@@ -235,6 +238,7 @@ class AGTrainer:
                  generation_task='answer',
                  ):
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.decode_tokenizer = tokenizer.from_pretrained(lm_name)
         lm_vocab_path = './{lm_name}_vocab'.format(lm_name=lm_name)
         if not os.path.exists(lm_vocab_path):
             os.makedirs(lm_vocab_path)
@@ -323,9 +327,6 @@ class AGTrainer:
 
         return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask
 
-    def _decode_output(self, output_encode):
-        return self.tokenizer.decode(output_encode.squeeze().tolist(), skip_special_tokens=True)
-
     def train(self):
         self.model.train()
         for epoch in range(self.epochs):
@@ -384,12 +385,23 @@ class QGKGGenerator:
         self.qg_model.to(self.device)
         self.kg_model.to(self.device)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.decode_tokenizer = tokenizer.from_pretrained(lm_name)
         if 't5' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': "<cls>"})
         elif 'prophetnet' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
+
+    def _decode_output(self, output_encode):
+        batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
+        batch_decoded = batch_decoded.replace('cls>', '<cls>')
+        return batch_decoded
+
+    def _decode_batch_output(self, output_encode):
+        batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
+        batch_decoded = [text.replace('cls>', '<cls>') for text in batch_decoded]
+        return batch_decoded
 
     def generate(self, p):
         self.qg_model.eval()
@@ -403,8 +415,7 @@ class QGKGGenerator:
             k_input_ids = passage_encode['input_ids'].to(self.device)
             _, g_k_encode = self.kg_model(k_input_ids, mode='infer')
             # print('gk_encode: ', g_k_encode)
-            g_k = self.tokenizer.decode(g_k_encode.squeeze().tolist(), skip_special_tokens=False)
-            g_k = g_k.replace(self.tokenizer.pad_token, '')
+            g_k = self._decode_output(g_k_encode)
             # print(g_k)
             for i in range(5):
                 kp = g_k + ' ' + self.tokenizer.cls_token + ' ' + p
@@ -415,13 +426,42 @@ class QGKGGenerator:
                                                        max_length=self.max_encoder_len)
                 kp_input_ids = kp_encode['input_ids'].to(self.device)
                 decoder_last_hidden_state, _, g_q_encode = self.qg_model(kp_input_ids, mode='infer')
-                g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=False)
-                g_q = g_q.replace(self.tokenizer.pad_token, '')
+                g_q = self._decode_output(g_q_encode)
                 # print(g_q)
                 _, g_k_encode = self.kg_model(k_input_ids, decoder_input_ids=decoder_last_hidden_state, mode='infer')
                 # print('gk_encode: ', g_k_encode)
-                g_k = self.tokenizer.decode(g_k_encode.squeeze().tolist(), skip_special_tokens=False)
-                g_k = g_k.replace(self.tokenizer.pad_token, '')
+                g_k = self._decode_output(g_k_encode)
+                # print(g_k)
+            return g_k, g_q
+
+    def generate_batch(self, passages):
+        self.qg_model.eval()
+        self.kg_model.eval()
+        with torch.no_grad():
+            passage_encode = self.tokenizer.encode_plus(passages,
+                                                        return_tensors="pt",
+                                                        padding="max_length",
+                                                        truncation=True,
+                                                        max_length=self.max_encoder_len)
+            k_input_ids = passage_encode['input_ids'].to(self.device)
+            _, g_k_encode = self.kg_model(k_input_ids, mode='infer')
+            g_k = self._decode_batch_output(g_k_encode)
+            for i in range(5):
+                kp = []
+                for j in range(len(passages)):
+                    kp.append(g_k[j] + ' ' + self.tokenizer.cls_token + ' ' + passages[j])
+                kp_encode = self.tokenizer.encode_plus(kp,
+                                                       return_tensors="pt",
+                                                       padding="max_length",
+                                                       truncation=True,
+                                                       max_length=self.max_encoder_len)
+                kp_input_ids = kp_encode['input_ids'].to(self.device)
+                decoder_last_hidden_state, _, g_q_encode = self.qg_model(kp_input_ids, mode='infer')
+                g_q = self._decode_batch_output(g_q_encode)
+                # print(g_q)
+                _, g_k_encode = self.kg_model(k_input_ids, decoder_input_ids=decoder_last_hidden_state, mode='infer')
+                # print('gk_encode: ', g_k_encode)
+                g_k = self._decode_batch_output(g_k_encode)
                 # print(g_k)
             return g_k, g_q
 
@@ -432,12 +472,18 @@ class AGGenerator:
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.ag_model.to(self.device)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        self.decode_tokenizer = tokenizer.from_pretrained(lm_name)
         if 't5' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': "<cls>"})
         elif 'prophetnet' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
+
+    def _decode_output(self, output_encode):
+        batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
+        batch_decoded = batch_decoded.replace('cls>', '<cls>')
+        return batch_decoded
 
     def _prepare_input_for_ag(self, passage, question, keyphrase):
         input_text = keyphrase + ' {} '.format(self.tokenizer.sep_token) + passage + \
@@ -457,6 +503,6 @@ class AGGenerator:
             encoder_input_ids = self._prepare_input_for_ag(keyphrase, passage, question)
             encoder_input_ids = encoder_input_ids.to('cuda')
             g_a_encode = self.ag_model(encoder_input_ids, None, None, mode='infer')
-            g_a = self.tokenizer.decode(g_a_encode.squeeze().tolist(), skip_special_tokens=True)
+            g_a = self._decode_output(g_a_encode)
 
             return g_a
