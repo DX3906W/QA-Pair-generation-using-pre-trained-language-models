@@ -179,7 +179,7 @@ class QGKGTrainer:
 
                     self.kg_optimizer.zero_grad()
                     encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_kg(
-                        keyphrase, passage)
+                        passage, keyphrase)
                     kg_loss, k_decoder_out = self.kg_model(
                         encoder_input_ids,
                         encoder_attention_mask,
@@ -399,11 +399,13 @@ class QGKGGenerator:
                                                         truncation=True,
                                                         max_length=self.max_encoder_len)
             k_input_ids = passage_encode['input_ids'].to(self.device)
-            g_k_encode = self.kg_model(k_input_ids, mode='infer')
+            _, g_k_encode = self.kg_model(k_input_ids, mode='infer')
+            # print('gk_encode: ', g_k_encode)
             g_k = self.tokenizer.decode(g_k_encode.squeeze().tolist(), skip_special_tokens=False)
             g_k = g_k.replace(self.tokenizer.pad_token, '')
+            # print(g_k)
             for i in range(5):
-                kp = g_k + ' ' + self.tokenizer.sep_token + ' ' + p
+                kp = g_k + ' ' + self.tokenizer.cls_token + ' ' + p
                 kp_encode = self.tokenizer.encode_plus(kp,
                                                        return_tensors="pt",
                                                        padding="max_length",
@@ -413,11 +415,12 @@ class QGKGGenerator:
                 decoder_last_hidden_state, _, g_q_encode = self.qg_model(kp_input_ids, mode='infer')
                 g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=False)
                 g_q = g_q.replace(self.tokenizer.pad_token, '')
-
-                g_k_encode = self.kg_model(k_input_ids, decoder_input_ids=decoder_last_hidden_state, mode='infer')
+                # print(g_q)
+                _, g_k_encode = self.kg_model(k_input_ids, decoder_input_ids=decoder_last_hidden_state, mode='infer')
+                # print('gk_encode: ', g_k_encode)
                 g_k = self.tokenizer.decode(g_k_encode.squeeze().tolist(), skip_special_tokens=False)
                 g_k = g_k.replace(self.tokenizer.pad_token, '')
-
+                # print(g_k)
             return g_k, g_q
 
 

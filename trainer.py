@@ -248,10 +248,13 @@ class Trainer:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_k, g_q = qgkg_generator.generate(p)
+                print(g_k)
+                print(g_q)
                 references.append(a + ' ' + q)
                 predictions.append(g_k + ' ' + g_q)
                 f.write(p + '\n')
                 f.write(g_q + '\n')
+                f.write(g_k + '\n')
                 f.write('\n')
         f.close()
         print('Generated question and keyphrase evaluation: ', evaluate_metrics(predictions, references))
@@ -328,15 +331,15 @@ if __name__ == "__main__":
     # trainer.train('qgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     # trainer.train('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     trainer.train('qgkgtask', 't5', 't5-base')
-    trainer.test_pipeline(lm_type='prophetnet',
-                          lm_name='microsoft/prophetnet-large-uncased',
-                          saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_3.pth.tar',
-                          saved_ag_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/answer_2.pth.tar',
-                          dg_lm_type='t5',
-                          dg_lm_name='t5-base',
-                          saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
-                          max_encoder_len=256,
-                          max_decoder_len=128)
+    # trainer.test_pipeline(lm_type='prophetnet',
+    #                       lm_name='microsoft/prophetnet-large-uncased',
+    #                       saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_3.pth.tar',
+    #                       saved_ag_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/answer_2.pth.tar',
+    #                       dg_lm_type='t5',
+    #                       dg_lm_name='t5-base',
+    #                       saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
+    #                       max_encoder_len=256,
+    #                       max_decoder_len=128)
     # trainer.test_multitask(lm_type='prophetnet',
     #                        lm_name='microsoft/prophetnet-large-uncased',
     #                        saved_model='saved_models/multitask/microsoft/prophetnet-large-uncased/multi_0.pth.tar',
@@ -357,7 +360,7 @@ if __name__ == "__main__":
     #                    max_decoder_len=128)
     trainer.test_qgkg(lm_type='t5',
                       lm_name='t5-base',
-                      saved_qg_model='./saved_models/joint/t5-base/',
-                      saved_kg_model='./saved_models/joint/t5-base/',
+                      saved_qg_model='./saved_models/joint/t5-base/qg_0_3500.pth.tar',
+                      saved_kg_model='./saved_models/joint/t5-base/kg_0_3500.pth.tar',
                       max_encoder_len=256,
                       max_decoder_len=128)
