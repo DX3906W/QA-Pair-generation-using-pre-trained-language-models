@@ -33,6 +33,9 @@ class QGKGTrainer:
             os.makedirs(lm_vocab_path)
         if 't5' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': "<cls>"})
+        elif 'prophetnet' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
+
         self.tokenizer.save_pretrained(lm_vocab_path)
         print('vocab size: ', self.tokenizer.vocab_size)
         print('special tokens: ', self.tokenizer.all_special_tokens)
@@ -56,8 +59,8 @@ class QGKGTrainer:
         self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
         self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
-        if self.saved_model is not None:
-            self.load_model_from_ckpt()
+        # if self.saved_model is not None:
+        self.load_model_from_ckpt()
         self.qg_model.to(self.device)
         self.kg_model.to(self.device)
 
@@ -65,9 +68,13 @@ class QGKGTrainer:
         self.load_data()
 
     def load_model_from_ckpt(self):
-        ckpt = torch.load(self.saved_model)
-        self.model = ckpt['state_dict']
-        self.qg_optimizer = ckpt['optimizer']
+        kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_0_1500.pth.tar')
+        self.kg_model = kg_ckpt['state_dict']
+        self.kg_optimizer = kg_ckpt['optimizer']
+
+        qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_0_1500.pth.tar')
+        self.qg_model = qg_ckpt['state_dict']
+        self.qg_optimizer = qg_ckpt['optimizer']
 
     def load_data(self):
         if 'processed_squad' in self.dataset:
@@ -95,7 +102,7 @@ class QGKGTrainer:
         
         if keyphrase is None:
             return encoder_input_ids, encoder_attention_mask, None, None
-        keyphrase.replace('<sep>', self.tokenizer.cls_token)
+        # keyphrase.replace('<sep>', self.tokenizer.cls_token)
 
         decoder_inputs = self.tokenizer(
             keyphrase,
@@ -123,7 +130,7 @@ class QGKGTrainer:
         encoder_input_ids = encoder_inputs["input_ids"].to(self.device)
         encoder_attention_mask = encoder_inputs["attention_mask"].to(self.device)
 
-        question.replace('<sep>', self.tokenizer.cls_token)
+        # question.replace('<sep>', self.tokenizer.cls_token)
         decoder_inputs = self.tokenizer(
             question,
             return_tensors="pt",
@@ -137,7 +144,7 @@ class QGKGTrainer:
         return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask
 
     def _decode_output(self, output_encode):
-        print(output_encode.shape)
+        # print(output_encode.shape)
         return self.tokenizer.batch_decode(output_encode, skip_special_tokens=True)
 
     def train(self):
@@ -145,9 +152,9 @@ class QGKGTrainer:
         self.qg_model.train()
         for epoch in range(self.epochs):
             for step, data in enumerate(self.train_dataloader):
+                real_step = 1500 + step
                 passage, question, answer = data
-                for iter in range(10):
-                    print(iter)
+                for iter in range(5):
                     if iter == 0:
                         with torch.no_grad():
                             encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None)
@@ -162,7 +169,7 @@ class QGKGTrainer:
                     self.qg_optimizer.zero_grad()
                     encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_qg(
                         keyphrase, passage, question)
-                    decoder_last_hidden_state, qg_loss, decoder_out = self.qg_model(
+                    decoder_last_hidden_state, qg_loss, q_decoder_out = self.qg_model(
                         encoder_input_ids,
                         encoder_attention_mask,
                         decoder_input_ids,
@@ -173,32 +180,39 @@ class QGKGTrainer:
                     self.kg_optimizer.zero_grad()
                     encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_kg(
                         keyphrase, passage)
-                    kg_loss, decoder_out = self.kg_model(
+                    kg_loss, k_decoder_out = self.kg_model(
                         encoder_input_ids,
                         encoder_attention_mask,
                         decoder_input_ids,
                         decoder_last_hidden_state.detach(),
                         mode='train')
-                    keyphrase = self._decode_output(decoder_out)
+                    keyphrase = self._decode_output(k_decoder_out)
                     kg_loss.backward()
                     self.kg_optimizer.step()
 
-                    if step % 10 == 0 and iter == 9:
+                    if step % 10 == 0 and iter == 4:
                         print("Epoch: {}  Step:{}  KG Loss: {}   QG Loss: {}".format(
                             epoch, step, kg_loss.item(), qg_loss.item()))
-            path = './saved_models/joint/{lm_name}'.format(lm_name=self.lm_name)
-            folder = os.path.exists(path)
-            if not folder:
-                print('creat path')
-                os.makedirs(path)
-            torch.save({'state_dict': self.kg_model, 'optimizer': self.kg_optimizer},
-                       '{path}/kg_{epoch}.pth.tar'.format(
-                           path=path, epoch=epoch))
-            torch.save({'state_dict': self.qg_model, 'optimizer': self.qg_optimizer},
-                       '{path}/qg_{epoch}.pth.tar'.format(
-                           path=path, epoch=epoch))
+                    if step % 50 == 0 and iter == 4:
+                        g_q = self._decode_output(q_decoder_out)
+                        print("Generated questions: ", g_q)
+                        print("Generated answers: ", keyphrase)
+                        print("Reference questions: ", question)
+                        print("Reference answers: ", answer)
+                path = './saved_models/joint/{lm_name}'.format(lm_name=self.lm_name)
+                if step > 0 and step % 500 == 0:
+                    folder = os.path.exists(path)
+                    if not folder:
+                        print('creat path')
+                        os.makedirs(path)
+                    torch.save({'state_dict': self.kg_model, 'optimizer': self.kg_optimizer},
+                                '{path}/kg_{epoch}_{step}.pth.tar'.format(
+                                    path=path, epoch=epoch, step=real_step))
+                    torch.save({'state_dict': self.qg_model, 'optimizer': self.qg_optimizer},
+                                '{path}/qg_{epoch}_{step}.pth.tar'.format(
+                                    path=path, epoch=epoch, step=real_step))
 
-            self.validate()
+            # self.validate()
             # print(self.infer())
 
     def validate(self):

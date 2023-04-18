@@ -9,6 +9,9 @@ class QuestionGenerationModel(nn.Module):
     def __init__(self, lm, lm_name):
         super().__init__()
         self.qg_model = lm.from_pretrained(lm_name)
+    
+    def _decode(self, logits):
+        return torch.argmax(logits, dim=2)
 
     def forward(self, encoder_input_ids, encoder_attention_mask, decoder_input_ids, mode='train'):
         if mode == 'train':
@@ -21,7 +24,7 @@ class QuestionGenerationModel(nn.Module):
             decoder_last_hidden_state = res["decoder_hidden_states"][-1]
             # print(torch.stack(res['decoder_hidden_states']).shape)
             decoder_loss = res['loss']
-            decoder_out = None
+            decoder_out = self._decode(res['logits'])
         else:
             res = self.qg_model.generate(input_ids=encoder_input_ids,
                                          num_beams=1,

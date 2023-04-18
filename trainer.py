@@ -57,15 +57,15 @@ class Trainer:
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
             'lambda_p': 0,
-            'batch_size': 16,
+            'batch_size': 8,
             'epochs': 5,
-            'lr': 2e-5,
+            'lr': 1e-5,
             'vocab_size': 50265,
             'embed_dim': 768,
             'num_heads': 12,
             'dataset': 'processed_squad',
             # 'dataset': 'race',
-            'max_encoder_len': 300,
+            'max_encoder_len': 256,
             'max_decoder_len': 128,
             # 'saved_model': None,
             # 'saved_model': './saved_models/pipeline/microsoft/prophetnet-large-uncased/question_2.pth.tar',
@@ -226,7 +226,8 @@ class Trainer:
 if __name__ == "__main__":
     trainer = Trainer()
     # trainer.train('qgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
-    trainer.train('qgkgtask', 't5', 't5-small')
+    # trainer.train('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
+    trainer.train('qgkgtask', 't5', 't5-base')
     trainer.test_pipeline(lm_type='prophetnet',
                           lm_name='microsoft/prophetnet-large-uncased',
                           saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_3.pth.tar',

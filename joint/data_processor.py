@@ -20,7 +20,8 @@ class QGKGDataset(Dataset):
 
     def __getitem__(self, index):
         passage, question, answer = self.datas.iloc[index]
-
+        question = question.replace('<sep>', self.tokenizer.cls_token)
+        answer = answer.replace('<sep>', self.tokenizer.cls_token)
         return passage, question, answer
 
 
