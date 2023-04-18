@@ -99,7 +99,7 @@ class QGKGTrainer:
         )
         encoder_input_ids = encoder_inputs["input_ids"].to(self.device)
         encoder_attention_mask = encoder_inputs["attention_mask"].to(self.device)
-        
+
         if keyphrase is None:
             return encoder_input_ids, encoder_attention_mask, None, None
         # keyphrase.replace('<sep>', self.tokenizer.cls_token)
@@ -113,7 +113,7 @@ class QGKGTrainer:
         )
         decoder_input_ids = decoder_inputs["input_ids"].to(self.device)
         decoder_attention_mask = decoder_inputs["attention_mask"].to(self.device)
-        
+
         return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask
 
     def _prepare_input_for_qg(self, keyphrase, passage, question):
@@ -206,48 +206,11 @@ class QGKGTrainer:
                         print('creat path')
                         os.makedirs(path)
                     torch.save({'state_dict': self.kg_model, 'optimizer': self.kg_optimizer},
-                                '{path}/kg_{epoch}_{step}.pth.tar'.format(
-                                    path=path, epoch=epoch, step=real_step))
+                               '{path}/kg_{epoch}_{step}.pth.tar'.format(
+                                   path=path, epoch=epoch, step=real_step))
                     torch.save({'state_dict': self.qg_model, 'optimizer': self.qg_optimizer},
-                                '{path}/qg_{epoch}_{step}.pth.tar'.format(
-                                    path=path, epoch=epoch, step=real_step))
-
-            # self.validate()
-            # print(self.infer())
-
-    def validate(self):
-        self.model.eval()
-        with torch.no_grad():
-            for step, data in enumerate(self.val_dataloader):
-                batch = [d.to(self.device) for d in data]
-                input_ids, attention_mask, label_ids = batch
-                outputs = self.model(input_ids=input_ids,
-                                     attention_mask=attention_mask,
-                                     labels=label_ids, )
-                loss = outputs[0]
-                if step % 10 == 0:
-                    print("Validation Step:{}  Loss:{}".format(step, loss.item()))
-
-                if step % 50 == 0:
-                    input_ids = self.tokenizer(self.test_sample).input_ids
-                    g_p = self.model.generate(input_ids)
-                    print(self.tokenizer.decode(g_p.squeeze().tolist(), skip_special_tokens=True))
-
-    # def infer(self, save_predictions=False):
-    #     self.model.eval()
-    #     predictions = []
-    #     references = []
-    #     for passage, answer, question in zip(self.benchmark_data['passage'], self.benchmark_data['answer'],
-    #                                          self.benchmark_data['question']):
-    #         inputs = passage
-    #         references.append(answer)
-    #         with torch.no_grad():
-    #             input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
-    #             input_ids = input_ids.to(self.device)
-    #             outputs = self.model.generate(input_ids)
-    #             decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
-    #             predictions.append(decoded_outputs)
-    #     return evaluate_metrics(predictions, references)
+                               '{path}/qg_{epoch}_{step}.pth.tar'.format(
+                                   path=path, epoch=epoch, step=real_step))
 
 
 class AGTrainer:
@@ -410,22 +373,6 @@ class AGTrainer:
                     g_p = self.model.generate(input_ids)
                     print(self.tokenizer.decode(g_p.squeeze().tolist(), skip_special_tokens=True))
 
-    # def infer(self, save_predictions=False):
-    #     self.model.eval()
-    #     predictions = []
-    #     references = []
-    #     for passage, answer, question in zip(self.benchmark_data['passage'], self.benchmark_data['answer'],
-    #                                          self.benchmark_data['question']):
-    #         inputs = passage
-    #         references.append(answer)
-    #         with torch.no_grad():
-    #             input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
-    #             input_ids = input_ids.to(self.device)
-    #             outputs = self.model.generate(input_ids)
-    #             decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
-    #             predictions.append(decoded_outputs)
-    #     return evaluate_metrics(predictions, references)
-
 
 class QGKGGenerator:
     def __init__(self, lm_name, tokenizer, saved_qg_model, saved_kg_model, max_encoder_len, max_decoder_len):
@@ -435,29 +382,41 @@ class QGKGGenerator:
         self.qg_model.to(self.device)
         self.kg_model.to(self.device)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        if 't5' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': "<cls>"})
+        elif 'prophetnet' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
     def generate(self, p):
+        self.qg_model.eval()
+        self.kg_model.eval()
         with torch.no_grad():
-            keyphrase_encode = self.tokenizer.encode_plus(p,
-                                                          return_tensors="pt",
-                                                          padding="max_length",
-                                                          truncation=True,
-                                                          max_length=self.max_encoder_len)
-            k_input_ids = keyphrase_encode['input_ids'].to('cuda')
-            g_k_encode = self.kg_model.generate(k_input_ids, max_length=self.max_decoder_len)
-            g_k = self.tokenizer.decode(g_k_encode.squeeze().tolist(), skip_special_tokens=True)
+            passage_encode = self.tokenizer.encode_plus(p,
+                                                        return_tensors="pt",
+                                                        padding="max_length",
+                                                        truncation=True,
+                                                        max_length=self.max_encoder_len)
+            k_input_ids = passage_encode['input_ids'].to(self.device)
+            g_k_encode = self.kg_model(k_input_ids, mode='infer')
+            g_k = self.tokenizer.decode(g_k_encode.squeeze().tolist(), skip_special_tokens=False)
+            g_k = g_k.replace(self.tokenizer.pad_token, '')
+            for i in range(5):
+                kp = g_k + ' ' + self.tokenizer.sep_token + ' ' + p
+                kp_encode = self.tokenizer.encode_plus(kp,
+                                                       return_tensors="pt",
+                                                       padding="max_length",
+                                                       truncation=True,
+                                                       max_length=self.max_encoder_len)
+                kp_input_ids = kp_encode['input_ids'].to(self.device)
+                decoder_last_hidden_state, _, g_q_encode = self.qg_model(kp_input_ids, mode='infer')
+                g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=False)
+                g_q = g_q.replace(self.tokenizer.pad_token, '')
 
-            kp = g_k + ' ' + self.tokenizer.sep_token + ' ' + p
-            kp_encode = self.tokenizer.encode_plus(kp,
-                                                   return_tensors="pt",
-                                                   padding="max_length",
-                                                   truncation=True,
-                                                   max_length=self.max_encoder_len)
-            kp_input_ids = kp_encode['input_ids'].to('cuda')
-            g_q_encode = self.qg_model.generate(kp_input_ids, max_length=self.max_decoder_len)
-            g_q = self.tokenizer.decode(g_q_encode.squeeze().tolist(), skip_special_tokens=True)
+                g_k_encode = self.kg_model(k_input_ids, decoder_input_ids=decoder_last_hidden_state, mode='infer')
+                g_k = self.tokenizer.decode(g_k_encode.squeeze().tolist(), skip_special_tokens=False)
+                g_k = g_k.replace(self.tokenizer.pad_token, '')
 
             return g_k, g_q
 
@@ -468,10 +427,14 @@ class AGGenerator:
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.ag_model.to(self.device)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        if 't5' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': "<cls>"})
+        elif 'prophetnet' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-    def _prepare_input_for_ag(self, keyphrase, passage, question):
+    def _prepare_input_for_ag(self, passage, question, keyphrase):
         input_text = keyphrase + ' {} '.format(self.tokenizer.sep_token) + passage + \
                      ' {} '.format(self.tokenizer.sep_token) + question
         encoder_inputs = self.tokenizer.encode_plus(

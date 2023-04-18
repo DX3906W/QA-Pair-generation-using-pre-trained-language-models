@@ -86,11 +86,12 @@ class Trainer:
     def analyze_file_name(self, file_name):
         return file_name.split('/')[-1].split('.')[0]
 
-    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, dg_lm_type, dg_lm_name, saved_dg_model, max_encoder_len,
+    def test_pipeline(self, lm_type, lm_name, saved_ag_model, saved_qg_model, dg_lm_type, dg_lm_name, saved_dg_model,
+                      max_encoder_len,
                       max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
         qa_file_name = self.analyze_file_name(saved_ag_model) + '_' + self.analyze_file_name(saved_qg_model) \
-                       + '_d_' + self.analyze_file_name(saved_dg_model) + '_'  +lm_name.split('/')[0]
+                       + '_d_' + self.analyze_file_name(saved_dg_model) + '_' + self.analyze_file_name(lm_name)
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
@@ -140,9 +141,11 @@ class Trainer:
         print('Generated question and answer evaluation: ', evaluate_metrics(predictions, references))
         print('Generated distractors evaluation: ', evaluate_metrics(d_predictions, d_references))
 
-    def test_multitask(self, lm_type, lm_name, saved_model, dg_lm_type, dg_lm_name, saved_dg_model, max_encoder_len, max_decoder_len):
+    def test_multitask(self, lm_type, lm_name, saved_model, dg_lm_type, dg_lm_name, saved_dg_model, max_encoder_len,
+                       max_decoder_len):
         tokenizer = self.tokenizers.get(lm_type)
-        qa_file_name = self.analyze_file_name(saved_model) + '_d_' + self.analyze_file_name(saved_dg_model)+ '_' + lm_name.split('/')[-1]
+        qa_file_name = self.analyze_file_name(saved_model) + '_d_' + self.analyze_file_name(saved_dg_model) + '_' + \
+                       lm_name.split('/')[-1]
         param_dict = {
             'lm_name': lm_name,
             'tokenizer': tokenizer,
@@ -222,6 +225,103 @@ class Trainer:
 
         print(evaluate_metrics(predictions, references))
 
+    def test_qgkg(self, lm_type, lm_name, saved_qg_model, saved_kg_model, max_encoder_len, max_decoder_len):
+        qa_file_name = self.analyze_file_name(saved_qg_model) + '_' + self.analyze_file_name(
+            saved_kg_model) + self.analyze_file_name(lm_name)
+        tokenizer = self.tokenizers.get(lm_type)
+        qgkg_param_dict = {
+            'lm_name': lm_name,
+            'tokenizer': tokenizer,
+            'max_encoder_len': max_encoder_len,
+            'max_decoder_len': max_decoder_len,
+            'saved_qg_model': saved_qg_model,
+            'saved_kg_model': saved_kg_model,
+        }
+        qgkg_generator = QGKGGenerator(**qgkg_param_dict)
+        benchmark_data = BenchmarkLoader().load_data('python_programming.json')
+        predictions = []
+        references = []
+        path = './benchmark_qa/joint/{lm_type}'.format(lm_type=lm_type)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        with open('{path}/{qa_file_name}.txt'.format(path=path, qa_file_name=qa_file_name), 'w+') as f:
+            for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
+                                  benchmark_data['question'], benchmark_data['distractor']):
+                g_k, g_q = qgkg_generator.generate(p)
+                references.append(a + ' ' + q)
+                predictions.append(g_k + ' ' + g_q)
+                f.write(p + '\n')
+                f.write(g_q + '\n')
+                f.write('\n')
+        f.close()
+        print('Generated question and keyphrase evaluation: ', evaluate_metrics(predictions, references))
+
+    def test_joint(self, lm_type, lm_name, saved_qg_model, saved_kg_model, saved_ag_model,
+                   dg_lm_type, dg_lm_name, saved_dg_model, max_encoder_len, max_decoder_len):
+        qa_file_name = self.analyze_file_name(saved_qg_model) + '_' + self.analyze_file_name(saved_kg_model) \
+                       + '_' + self.analyze_file_name(saved_ag_model) + '_d_' + self.analyze_file_name(
+            saved_dg_model) + '_' + self.analyze_file_name(lm_name)
+        tokenizer = self.tokenizers.get(lm_type)
+        qgkg_param_dict = {
+            'lm_name': lm_name,
+            'tokenizer': tokenizer,
+            'max_encoder_len': max_encoder_len,
+            'max_decoder_len': max_decoder_len,
+            'saved_qg_model': saved_qg_model,
+            'saved_kg_model': saved_kg_model,
+        }
+        qgkg_generator = QGKGGenerator(**qgkg_param_dict)
+        ag_param_dict = {
+            'lm_name': lm_name,
+            'tokenizer': tokenizer,
+            'max_encoder_len': max_encoder_len,
+            'max_decoder_len': max_decoder_len,
+            'saved_ag_model': saved_ag_model,
+        }
+        ag_generator = AGGenerator(**ag_param_dict)
+        dg_tokenizer = self.tokenizers.get(dg_lm_type)
+        dg_param_dict = {
+            'lm_name': dg_lm_name,
+            'tokenizer': dg_tokenizer,
+            'saved_dg_model': saved_dg_model,
+            'max_encoder_len': max_encoder_len,
+            'max_decoder_len': max_decoder_len,
+        }
+        d_generator = DistractorGenerator(**dg_param_dict)
+
+        benchmark_data = BenchmarkLoader().load_data('python_programming.json')
+        predictions = []
+        references = []
+        d_predictions = []
+        d_references = []
+        path = './benchmark_qa/joint/{lm_type}'.format(lm_type=lm_type)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        with open('{path}/{qa_file_name}.txt'.format(path=path, qa_file_name=qa_file_name), 'w+') as f:
+            for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
+                                  benchmark_data['question'], benchmark_data['distractor']):
+                g_k, g_q = qgkg_generator.generate(p)
+                g_a = ag_generator.generate(p, g_q, g_k)
+                references.append(a + ' ' + q)
+                predictions.append(g_a + ' ' + g_q)
+                g_d = d_generator.generate(p, g_q, g_a)
+                d_predictions.append(g_d)
+                d_references.append(d)
+                for _ in range(3):
+                    g_d = d_generator.generate(p, g_q, g_a)
+                    d_predictions.append(g_d)
+                    d_references.append(d)
+                f.write(p + '\n')
+                f.write(g_q + '\n')
+                f.write(g_a + '\n')
+                for i in range(3, 0, -1):
+                    f.write(d_predictions[-i] + '\n')
+                f.write('\n')
+        f.close()
+
+        print('Generated question and answer evaluation: ', evaluate_metrics(predictions, references))
+        print('Generated distractors evaluation: ', evaluate_metrics(d_predictions, d_references))
+
 
 if __name__ == "__main__":
     trainer = Trainer()
@@ -245,3 +345,19 @@ if __name__ == "__main__":
     #                        saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
     #                        max_encoder_len=256,
     #                        max_decoder_len=128)
+    # trainer.test_joint(lm_type='t5',
+    #                    lm_name='t5-base',
+    #                    saved_qg_model='./saved_models/joint/t5-base/',
+    #                    saved_kg_model='./saved_models/joint/t5-base/',
+    #                    saved_ag_model='./saved_model/joint/t5-base/',
+    #                    dg_lm_type='t5',
+    #                    dg_lm_name='t5-base',
+    #                    saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
+    #                    max_encoder_len=256,
+    #                    max_decoder_len=128)
+    trainer.test_qgkg(lm_type='t5',
+                      lm_name='t5-base',
+                      saved_qg_model='./saved_models/joint/t5-base/',
+                      saved_kg_model='./saved_models/joint/t5-base/',
+                      max_encoder_len=256,
+                      max_decoder_len=128)

@@ -134,7 +134,6 @@ class AGQGTrainer:
                     input_ids = self.tokenizer(self.test_simple).input_ids
                     g_p = self.model.generate(input_ids)
                     print(self.tokenizer.decode(g_p.squeeze().tolist(), skip_special_tokens=True))
-                    
 
     def infer(self, save_predictions=False):
         self.model.eval()
@@ -145,7 +144,7 @@ class AGQGTrainer:
                 inputs = passage
                 references.append(answer)
             else:
-                inputs = passage + ' [SEP] ' + answer
+                inputs = passage + ' ' + self.tokenizer.sep_token + ' ' + answer
                 references.append(question)
             encode_inputs = self.tokenizer.encode_plus(inputs,
                                                        return_tensors="pt",
@@ -169,6 +168,8 @@ class PipelineGenerator:
         self.ag_model.to(self.device)
         self.qg_model.to(self.device)
         self.tokenizer = tokenizer.from_pretrained(lm_name)
+        if 't5' in lm_name:
+            self.tokenizer.add_special_tokens({'sep_token': '<sep>'})
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
@@ -183,7 +184,7 @@ class PipelineGenerator:
             g_a_encode = self.ag_model.generate(p_input_ids, max_length=self.max_decoder_len)
             g_a = self.tokenizer.decode(g_a_encode.squeeze().tolist(), skip_special_tokens=True)
 
-            pa = p + ' [SEP] ' + g_a
+            pa = p + ' ' + self.tokenizer.sep_token + ' ' + g_a
             pa_encode = self.tokenizer.encode_plus(pa,
                                                    return_tensors="pt",
                                                    padding="max_length",
