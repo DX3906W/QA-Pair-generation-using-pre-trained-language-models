@@ -34,10 +34,17 @@ class QGKGTrainer:
             os.makedirs(lm_vocab_path)
         if 't5' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
+            self.decode_tokenizer.add_tokens('<cls>')
         elif 'prophetnet' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
+            self.decode_tokenizer.add_tokens('[CLS]')
         elif 'bart' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
+            self.decode_tokenizer.add_tokens('<cls>')
+        test_text = 'this is a <cls> test'
+        text_inputs = self.tokenizer.encode(test_text)
+        # print(self.tokenizer.decode(text_inputs, skip_special_tokens=True))
+        # print(self.decode_tokenizer.decode(text_inputs, skip_special_tokens=True))
 
         self.tokenizer.save_pretrained(lm_vocab_path)
         print('vocab size: ', self.tokenizer.vocab_size)
@@ -149,7 +156,8 @@ class QGKGTrainer:
     def _decode_output(self, output_encode):
         # print(output_encode.shape)
         batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
-        batch_decoded = [text.replace('cls>', '<cls>') for text in batch_decoded]
+        # batch_test = self.tokenizer.batch_decode(output_encode, skip_special_tokens=False)
+        # print(batch_test)
         return batch_decoded
 
     def train(self):
@@ -184,7 +192,7 @@ class QGKGTrainer:
 
                     self.kg_optimizer.zero_grad()
                     encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_kg(
-                        passage, keyphrase)
+                        passage, answer)
                     kg_loss, k_decoder_out = self.kg_model(
                         encoder_input_ids,
                         encoder_attention_mask,
@@ -394,13 +402,11 @@ class QGKGGenerator:
         self.max_decoder_len = max_decoder_len
 
     def _decode_output(self, output_encode):
-        batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
-        batch_decoded = batch_decoded.replace('cls>', '<cls>')
+        batch_decoded = self.decode_tokenizer.decode(output_encode, skip_special_tokens=True)
         return batch_decoded
 
     def _decode_batch_output(self, output_encode):
         batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
-        batch_decoded = [text.replace('cls>', '<cls>') for text in batch_decoded]
         return batch_decoded
 
     def generate(self, p):
@@ -481,8 +487,7 @@ class AGGenerator:
         self.max_decoder_len = max_decoder_len
 
     def _decode_output(self, output_encode):
-        batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
-        batch_decoded = batch_decoded.replace('cls>', '<cls>')
+        batch_decoded = self.decode_tokenizer.decode(output_encode, skip_special_tokens=True)
         return batch_decoded
 
     def _prepare_input_for_ag(self, passage, question, keyphrase):
