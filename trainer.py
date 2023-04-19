@@ -57,7 +57,7 @@ class Trainer:
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
             'lambda_p': 0,
-            'batch_size': 8,
+            'batch_size': 12,
             'epochs': 5,
             'lr': 1e-5,
             'vocab_size': 50265,

@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from transformers import AdamW
 from .model import QuestionGenerationModel, KeyphraseGenerationModel, AnswerGenerationModel
@@ -64,13 +65,13 @@ class QGKGTrainer:
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
-        self.qg_model = QuestionGenerationModel(generative_lm, lm_name)
-        self.kg_model = KeyphraseGenerationModel(generative_lm, lm_name)
+        self.qg_model = nn.DataParallel(QuestionGenerationModel(generative_lm, lm_name), device_ids=[0, 1])
+        self.kg_model = nn.DataParallel(KeyphraseGenerationModel(generative_lm, lm_name), device_ids=[0, 1])
         self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
         self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
         # if self.saved_model is not None:
-        # self.load_model_from_ckpt()
+        self.load_model_from_ckpt()
         self.qg_model.to(self.device)
         self.kg_model.to(self.device)
 
@@ -165,17 +166,20 @@ class QGKGTrainer:
         self.qg_model.train()
         for epoch in range(self.epochs):
             for step, data in enumerate(self.train_dataloader):
-                real_step = step
+                real_step = 1500 + step
                 passage, question, answer = data
                 for iter in range(5):
                     if iter == 0:
                         with torch.no_grad():
                             encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None)
+                            print(encoder_input_ids.shape)
+                            print(encoder_attention_mask.shape)
                             _, k_encode = self.kg_model(encoder_input_ids,
                                                         encoder_attention_mask,
                                                         decoder_input_ids=None,
                                                         question_hidden_state=None,
                                                         mode='infer')
+                            print(k_encode.shape)
                             # k_encode = k_encode.detach()
                             keyphrase = self._decode_output(k_encode)
 
@@ -187,7 +191,7 @@ class QGKGTrainer:
                         encoder_attention_mask,
                         decoder_input_ids,
                         mode='train')
-                    qg_loss.backward()
+                    qg_loss.sum().backward()
                     self.qg_optimizer.step()
 
                     self.kg_optimizer.zero_grad()
@@ -200,12 +204,12 @@ class QGKGTrainer:
                         decoder_last_hidden_state.detach(),
                         mode='train')
                     keyphrase = self._decode_output(k_decoder_out)
-                    kg_loss.backward()
+                    kg_loss.sum().backward()
                     self.kg_optimizer.step()
 
                     if step % 10 == 0 and iter == 4:
                         print("Epoch: {}  Step:{}  KG Loss: {}   QG Loss: {}".format(
-                            epoch, step, kg_loss.item(), qg_loss.item()))
+                            epoch, step, kg_loss.sum().item(), qg_loss.sum().item()))
                     if step % 50 == 0 and iter == 4:
                         g_q = self._decode_output(q_decoder_out)
                         print("Generated questions: ", g_q)
@@ -213,7 +217,7 @@ class QGKGTrainer:
                         print("Reference questions: ", question)
                         print("Reference answers: ", answer)
                 path = './saved_models/joint/{lm_name}'.format(lm_name=self.lm_name)
-                if step > 0 and step % 500 == 0:
+                if step > 0 and step % 200 == 0:
                     folder = os.path.exists(path)
                     if not folder:
                         print('creat path')
