@@ -251,6 +251,11 @@ class QGKGTrainer:
             rank=gpus_args.local_rank,
             init_method='env://'
         )
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--world-size', default=2, type=int, help='number of distributed processes')
+        parser.add_argument('--local_rank', type=int, help='rank of distributed processes')
+        gpus_args = parser.parse_args()
+
         self.load_data()
 
         self.qg_model.cuda(gpus_args.local_rank)
