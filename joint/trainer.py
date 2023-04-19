@@ -72,12 +72,6 @@ class QGKGTrainer:
         # if self.saved_model is not None:
         self.load_model_from_ckpt()
 
-        # multi gpus setting
-        self.parser = argparse.ArgumentParser()
-        self.parser.add_argument('--world-size', default=2, type=int, help='number of distributed processes')
-        self.parser.add_argument('--local_rank', type=int, help='rank of distributed processes')
-        self.gpus_args = self.parser.parse_args()
-
         self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
         self.load_data()
 
@@ -247,27 +241,24 @@ class QGKGTrainer:
         return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask
 
     def _decode_output(self, output_encode):
-        # print(output_encode.shape)
         batch_decoded = self.decode_tokenizer.batch_decode(output_encode, skip_special_tokens=True)
-        # batch_test = self.tokenizer.batch_decode(output_encode, skip_special_tokens=False)
-        # print(batch_test)
         return batch_decoded
 
-    def train(self):
-        torch.cuda.set_device(self.gpus_args.local_rank)
+    def train(self, gpus_args):
+        torch.cuda.set_device(gpus_args.local_rank)
         dist.init_process_group(
             backend='nccl',
-            world_size=self.gpus_args.world_size,
-            rank=self.gpus_args.local_rank,
+            world_size=gpus_args.world_size,
+            rank=gpus_args.local_rank,
             init_method='env://'
         )
 
-        self.qg_model.cuda(self.gpus_args.local_rank)
-        self.kg_model.cuda(self.gpus_args.local_rank)
+        self.qg_model.cuda(gpus_args.local_rank)
+        self.kg_model.cuda(gpus_args.local_rank)
 
-        self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[self.gpus_args.local_rank])
-        self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[self.gpus_args.local_rank])
-        self.start_train(self.gpus_args.local_rank)
+        self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[gpus_args.local_rank])
+        self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[gpus_args.local_rank])
+        self.start_train(gpus_args.local_rank)
 
 
 class AGTrainer:
