@@ -81,6 +81,11 @@ class Trainer:
 
         if self.task is None:
             return
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--world-size', default=2, type=int, help='number of distributed processes')
+        parser.add_argument('--local_rank', type=int, help='rank of distributed processes')
+        gpus_args = parser.parse_args()
+        print('trainer', gpus_args)
 
         self.task.train()
 
@@ -332,6 +337,11 @@ if __name__ == "__main__":
     # trainer.train('qgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     # trainer.train('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     # multi gpus setting
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--world-size', default=2, type=int, help='number of distributed processes')
+    parser.add_argument('--local_rank', type=int, help='rank of distributed processes')
+    gpus_args = parser.parse_args()
+    print('trainer main', gpus_args)
 
     trainer.train('qgkgtask', 't5', 't5-base')
     # trainer.test_pipeline(lm_type='prophetnet',

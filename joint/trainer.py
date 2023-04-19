@@ -249,6 +249,7 @@ class QGKGTrainer:
         parser.add_argument('--world-size', default=2, type=int, help='number of distributed processes')
         parser.add_argument('--local_rank', type=int, help='rank of distributed processes')
         gpus_args = parser.parse_args()
+        print('joint trainer', gpus_args)
         torch.cuda.set_device(gpus_args.local_rank)
 
         self.load_data()
