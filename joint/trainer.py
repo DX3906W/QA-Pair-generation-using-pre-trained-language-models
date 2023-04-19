@@ -73,7 +73,6 @@ class QGKGTrainer:
         self.load_model_from_ckpt()
 
         self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
-        self.load_data()
 
     def start_train(self, rank):
         self.kg_model.train()
@@ -252,6 +251,7 @@ class QGKGTrainer:
             rank=gpus_args.local_rank,
             init_method='env://'
         )
+        self.load_data()
 
         self.qg_model.cuda(gpus_args.local_rank)
         self.kg_model.cuda(gpus_args.local_rank)
