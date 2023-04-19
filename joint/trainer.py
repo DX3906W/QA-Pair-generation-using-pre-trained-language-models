@@ -244,18 +244,12 @@ class QGKGTrainer:
         return batch_decoded
 
     def train(self):
+        dist.init_process_group(backend='nccl')
         parser = argparse.ArgumentParser()
         parser.add_argument('--world-size', default=2, type=int, help='number of distributed processes')
         parser.add_argument('--local_rank', type=int, help='rank of distributed processes')
         gpus_args = parser.parse_args()
-
         torch.cuda.set_device(gpus_args.local_rank)
-        dist.init_process_group(
-            backend='nccl',
-            world_size=gpus_args.world_size,
-            rank=gpus_args.local_rank,
-            init_method='env://'
-        )
 
         self.load_data()
 
