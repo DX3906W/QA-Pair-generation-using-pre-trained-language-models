@@ -244,22 +244,22 @@ class QGKGTrainer:
         return batch_decoded
 
     def train(self):
-        dist.init_process_group(backend='nccl')
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--world-size', default=2, type=int, help='number of distributed processes')
-        parser.add_argument('--local_rank', type=int, help='rank of distributed processes')
-        gpus_args = parser.parse_args()
-        print('joint trainer', gpus_args)
-        torch.cuda.set_device(gpus_args.local_rank)
+        rank = int(os.environ["RANK"])
+        world_size = int(os.environ['WORLD_SIZE'])
+        local_rank = int(os.environ['LOCAL_RANK'])
+        dist.init_process_group(backend='nccl',
+                                world_size=world_size,
+                                rank=rank)
+        torch.cuda.set_device(local_rank)
 
         self.load_data()
 
-        self.qg_model.cuda(gpus_args.local_rank)
-        self.kg_model.cuda(gpus_args.local_rank)
+        self.qg_model.cuda(local_rank)
+        self.kg_model.cuda(local_rank)
 
-        self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[gpus_args.local_rank])
-        self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[gpus_args.local_rank])
-        self.start_train(gpus_args.local_rank)
+        self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[local_rank])
+        self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[local_rank])
+        self.start_train(local_rank)
 
 
 class AGTrainer:
