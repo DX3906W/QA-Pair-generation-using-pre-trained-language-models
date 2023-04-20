@@ -266,7 +266,9 @@ class Trainer:
                        + '_' + self.analyze_file_name(saved_ag_model) + '_d_' + self.analyze_file_name(
             saved_dg_model) + '_' + self.analyze_file_name(lm_name)
         tokenizer = self.tokenizers.get(lm_type)
+        generative_lm = self.generative_lms.get(lm_type)
         qgkg_param_dict = {
+            'generative_lm': generative_lm,
             'lm_name': lm_name,
             'tokenizer': tokenizer,
             'max_encoder_len': max_encoder_len,

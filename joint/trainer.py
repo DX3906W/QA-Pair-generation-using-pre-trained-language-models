@@ -83,8 +83,6 @@ class QGKGTrainer:
                     if iter == 0:
                         with torch.no_grad():
                             encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None, rank)
-                            # print(rank, ', ', encoder_input_ids.device)
-                            # print(rank, ', ', self.kg_model.device)
                             _, k_encode = self.kg_model(encoder_input_ids,
                                                         encoder_attention_mask,
                                                         decoder_input_ids=None,
@@ -257,15 +255,13 @@ class QGKGTrainer:
         # self.load_model_from_state_dict(local_rank)
         self.qg_model.cuda(local_rank)
         self.kg_model.cuda(local_rank)
-        # self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
-        # self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
         self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
         self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
         self.load_model_from_state_dict()
         self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
         self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
-        
+
         self.start_train(local_rank)
 
 
@@ -429,9 +425,9 @@ class AGTrainer:
 
 
 class QGKGGenerator:
-    def __init__(self, lm_name, tokenizer, saved_qg_model, saved_kg_model, max_encoder_len, max_decoder_len):
-        self.qg_model = QuestionGenerationModel().load_state_dict(torch.load(saved_qg_model)['state_dict'])
-        self.kg_model = torch.load(saved_kg_model)['state_dict']
+    def __init__(self, generative_lm, lm_name, tokenizer, saved_qg_model, saved_kg_model, max_encoder_len, max_decoder_len):
+        self.qg_model = QuestionGenerationModel(generative_lm, lm_name).load_state_dict(torch.load(saved_qg_model)['state_dict'])
+        self.kg_model = KeyphraseGenerationModel(generative_lm, lm_name).load_state_dict(torch.load(saved_kg_model)['state_dict'])
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.qg_model.to(self.device)
         self.kg_model.to(self.device)
