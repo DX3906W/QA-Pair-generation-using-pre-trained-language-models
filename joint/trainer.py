@@ -66,12 +66,9 @@ class QGKGTrainer:
 
         self.qg_model = QuestionGenerationModel(generative_lm, lm_name)
         self.kg_model = KeyphraseGenerationModel(generative_lm, lm_name)
-        self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
-        self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
-
-        # if self.saved_model is not None:
-        self.load_model_from_ckpt()
-
+        # self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
+        # self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
+        # self.load_model_from_state_dict()
         self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
 
     def start_train(self, rank):
@@ -80,12 +77,14 @@ class QGKGTrainer:
         for epoch in range(self.epochs):
             self.train_sampler.set_epoch(epoch)
             for step, data in enumerate(self.train_dataloader):
-                real_step = 1500 + step
+                real_step = 3300 + step
                 passage, question, answer = data
-                for iter in range(5):
+                for iter in range(3):
                     if iter == 0:
                         with torch.no_grad():
                             encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None, rank)
+                            # print(rank, ', ', encoder_input_ids.device)
+                            # print(rank, ', ', self.kg_model.device)
                             _, k_encode = self.kg_model(encoder_input_ids,
                                                         encoder_attention_mask,
                                                         decoder_input_ids=None,
@@ -118,10 +117,10 @@ class QGKGTrainer:
                     kg_loss.sum().backward()
                     self.kg_optimizer.step()
 
-                    if step % 10 == 0 and iter == 4:
+                    if step % 10 == 0 and iter == 2:
                         print("Epoch: {}  Step:{}  KG Loss: {}   QG Loss: {}".format(
                             epoch, step, kg_loss.sum().item(), qg_loss.sum().item()))
-                    if step % 50 == 0 and iter == 4:
+                    if step % 50 == 0 and iter == 2:
                         g_q = self._decode_output(q_decoder_out)
                         print("Generated questions: ", g_q)
                         print("Generated answers: ", keyphrase)
@@ -142,24 +141,25 @@ class QGKGTrainer:
                                    path=path, epoch=epoch, step=real_step))
 
     def load_model_from_ckpt(self):
-        kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_0_1500.pth.tar')
-        self.kg_model = kg_ckpt['state_dict']
-        self.kg_optimizer = kg_ckpt['optimizer']
+        kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_0_2900.pth.tar', map_location='cpu')
+        self.kg_model.module.load_state_dict(kg_ckpt['state_dict'].module.state_dict())
+        # self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
-        qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_0_1500.pth.tar')
-        self.qg_model = qg_ckpt['state_dict']
-        self.qg_optimizer = qg_ckpt['optimizer']
+        qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_0_1500.pth.tar', map_location='cpu')
+        self.qg_model.module.load_state_dict(qg_ckpt['state_dict'].module.state_dict())
+        # self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
 
-    def load_model_from_state_dict(self, rank):
-        kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_0_1500.pth.tar')
-        self.kg_model.load_state_dict(kg_ckpt['state_dict'])
-        self.kg_optimizer.load_state_dict(kg_ckpt['optimizer'])
+    def load_model_from_state_dict(self):
+        kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_0_3300.pth.tar', map_location='cpu')
+        # print(kg_ckpt['state_dict'].keys())
+        self.kg_model.module.load_state_dict(kg_ckpt['state_dict'])
+        # self.kg_optimizer.load_state_dict(kg_ckpt['optimizer'])
 
-        qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_0_1500.pth.tar')
-        self.qg_model.load_state_dict(qg_ckpt['state_dict'])
-        self.qg_optimizer.load_state_dict(qg_ckpt['optimizer'])
+        qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_0_3300.pth.tar', map_location='cpu')
+        self.qg_model.module.load_state_dict(qg_ckpt['state_dict'])
+        # self.qg_optimizer.load_state_dict(qg_ckpt['optimizer'])
 
-    def load_data(self):
+    def load_data(self, rank):
         if 'processed_squad' in self.dataset:
             train_data, val_data = SQuADLoaderForJoint().get_data()
         elif 'race' in self.dataset:
@@ -168,19 +168,19 @@ class QGKGTrainer:
             train_data, val_data = None, None
         train_dataset = QGKGDataset(train_data, self.tokenizer)
         val_dataset = QGKGDataset(val_data, self.tokenizer)
-        self.train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        self.val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset)
+        self.train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True, rank=rank)
+        self.val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=True, rank=rank)
 
         self.train_dataloader = DataLoader(dataset=train_dataset,
                                            batch_size=self.batch_size,
-                                           shuffle=True,
+                                           shuffle=False,
                                            num_workers=2,
                                            pin_memory=True,
                                            drop_last=True,
                                            sampler=self.train_sampler)
         self.val_dataloader = DataLoader(dataset=val_dataset,
                                          batch_size=self.batch_size,
-                                         shuffle=True,
+                                         shuffle=False,
                                          num_workers=2,
                                          pin_memory=True,
                                          drop_last=True,
@@ -252,13 +252,20 @@ class QGKGTrainer:
                                 rank=rank)
         torch.cuda.set_device(local_rank)
 
-        self.load_data()
-
+        self.load_data(rank)
+        # print('local rank', local_rank)
+        # self.load_model_from_state_dict(local_rank)
         self.qg_model.cuda(local_rank)
         self.kg_model.cuda(local_rank)
+        # self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
+        # self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
-        self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[local_rank])
-        self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[local_rank])
+        self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
+        self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
+        self.load_model_from_state_dict()
+        self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
+        self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
+        
         self.start_train(local_rank)
 
 
@@ -423,7 +430,7 @@ class AGTrainer:
 
 class QGKGGenerator:
     def __init__(self, lm_name, tokenizer, saved_qg_model, saved_kg_model, max_encoder_len, max_decoder_len):
-        self.qg_model = torch.load(saved_qg_model)['state_dict']
+        self.qg_model = QuestionGenerationModel().load_state_dict(torch.load(saved_qg_model)['state_dict'])
         self.kg_model = torch.load(saved_kg_model)['state_dict']
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.qg_model.to(self.device)
