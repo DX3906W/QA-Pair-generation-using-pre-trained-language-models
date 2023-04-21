@@ -319,23 +319,24 @@ class AGTrainer:
         self.ag_model = AnswerGenerationModel(generative_lm, lm_name)
         self.ag_optimizer = AdamW(params=self.ag_model.parameters(), lr=self.lr)
         self.qgkg_generator = QGKGGenerator(
+            lm,
             lm_name,
             tokenizer,
-            'saved_qg_model',
-            'saved_kg_model',
+            './saved_models/joint/t5-base/qg_3_1900',
+            './saved_models/joint/t5-base/kg_3',
             max_encoder_len,
             max_decoder_len)
 
         if self.saved_model is not None:
             self.load_model_from_ckpt()
-        self.model.to(self.device)
+        self.ag_model.to(self.device)
 
         self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
         self.load_data()
 
     def load_model_from_ckpt(self):
         ckpt = torch.load(self.saved_model)
-        self.model = ckpt['state_dict']
+        self.ag_model = ckpt['state_dict']
         self.ag_optimizer.load_state_dict(ckpt['state_dict'])
 
     def load_data(self):
@@ -384,12 +385,18 @@ class AGTrainer:
         return encoder_input_ids, encoder_attention_mask, decoder_input_ids, decoder_attention_mask
 
     def train(self):
-        self.model.train()
+        self.ag_model.train()
+        path = './saved_models/joint/{lm_name}'.format(lm_name=self.lm_name)
+        folder = os.path.exists(path)
+        if not folder:
+            print('creat path')
+            os.makedirs(path)
+
         for epoch in range(self.epochs):
             for step, data in enumerate(self.train_dataloader):
                 passage, _, answer = data
                 self.ag_optimizer.zero_grad()
-                keyphrase, question = self.qgkg_generator.generate(passage)
+                keyphrase, question = self.qgkg_generator.generate_batch(passage)
                 encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_ag(
                     keyphrase, passage, question, answer)
                 decoder_last_hidden_state, ag_loss, decoder_out = self.ag_model(
@@ -400,37 +407,14 @@ class AGTrainer:
                 ag_loss.backward()
                 self.ag_optimizer.step()
 
-                if step % 10 == 0 and iter == 9:
+                if step % 100 == 0:
                     print("Epoch: {}  Step:{}  AG Loss: {}".format(
                         epoch, step, ag_loss.item()))
-            path = './saved_models/joint/{lm_name}'.format(lm_name=self.lm_name)
-            folder = os.path.exists(path)
-            if not folder:
-                print('creat path')
-                os.makedirs(path)
             torch.save({'state_dict': self.ag_model, 'optimizer': self.ag_optimizer},
                        '{path}/ag_{epoch}.pth.tar'.format(
                            path=path, epoch=epoch))
-            self.validate()
+            # self.validate()
             # print(self.infer())
-
-    def validate(self):
-        self.model.eval()
-        with torch.no_grad():
-            for step, data in enumerate(self.val_dataloader):
-                batch = [d.to(self.device) for d in data]
-                input_ids, attention_mask, label_ids = batch
-                outputs = self.model(input_ids=input_ids,
-                                     attention_mask=attention_mask,
-                                     labels=label_ids, )
-                loss = outputs[0]
-                if step % 10 == 0:
-                    print("Validation Step:{}  Loss:{}".format(step, loss.item()))
-
-                if step % 50 == 0:
-                    input_ids = self.tokenizer(self.test_sample).input_ids
-                    g_p = self.model.generate(input_ids)
-                    print(self.tokenizer.decode(g_p.squeeze().tolist(), skip_special_tokens=True))
 
 
 class QGKGGenerator:
