@@ -58,7 +58,7 @@ class Trainer:
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
             'lambda_p': 0,
-            'batch_size': 6,
+            'batch_size': 10,
             'epochs': 5,
             'lr': 1e-5,
             'vocab_size': 50265,
@@ -66,8 +66,8 @@ class Trainer:
             'num_heads': 12,
             'dataset': 'processed_squad',
             # 'dataset': 'race',
-            'max_encoder_len': 256,
-            'max_decoder_len': 128,
+            'max_encoder_len': 128,
+            'max_decoder_len': 64,
             # 'saved_model': None,
             # 'saved_model': './saved_models/pipeline/microsoft/prophetnet-large-uncased/question_2.pth.tar',
             # 'saved_model': './saved_models/multitask/microsoft/prophetnet-large-uncased/multi_0.pth.tar'
@@ -230,7 +230,9 @@ class Trainer:
         qa_file_name = self.analyze_file_name(saved_qg_model) + '_' + self.analyze_file_name(
             saved_kg_model) + self.analyze_file_name(lm_name)
         tokenizer = self.tokenizers.get(lm_type)
+        generative_lm = self.generative_lms.get(lm_type)
         qgkg_param_dict = {
+            'generative_lm': generative_lm,
             'lm_name': lm_name,
             'tokenizer': tokenizer,
             'max_encoder_len': max_encoder_len,
@@ -333,7 +335,7 @@ if __name__ == "__main__":
     trainer = Trainer()
     # trainer.train('qgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     # trainer.train('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
-    # trainer.train('qgkgtask', 't5', 't5-base')
+    trainer.train('qgkgtask', 't5', 't5-base')
     # trainer.test_pipeline(lm_type='prophetnet',
     #                       lm_name='microsoft/prophetnet-large-uncased',
     #                       saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_3.pth.tar',
@@ -363,7 +365,7 @@ if __name__ == "__main__":
     #                    max_decoder_len=128)
     trainer.test_qgkg(lm_type='t5',
                       lm_name='t5-base',
-                      saved_qg_model='./saved_models/joint/t5-base/qg_0_3500.pth.tar',
-                      saved_kg_model='./saved_models/joint/t5-base/kg_0_3500.pth.tar',
+                      saved_qg_model='./saved_models/joint/t5-base/qg_2_2900.pth.tar',
+                      saved_kg_model='./saved_models/joint/t5-base/kg_2_2900.pth.tar',
                       max_encoder_len=256,
                       max_decoder_len=128)

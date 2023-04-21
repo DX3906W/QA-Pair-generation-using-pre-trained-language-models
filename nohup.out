@@ -145,3 +145,25 @@ usage: run.py [-h] [--nnodes NNODES] [--nproc_per_node NPROC_PER_NODE]
               [--master_port MASTER_PORT]
               training_script ...
 run.py: error: unrecognized arguments: -u
+Traceback (most recent call last):
+  File "/opt/conda/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/opt/conda/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/opt/conda/lib/python3.7/site-packages/torch/distributed/launch.py", line 150, in <module>
+    from torch.distributed.run import get_args_parser, run
+  File "/opt/conda/lib/python3.7/site-packages/torch/distributed/run.py", line 383, in <module>
+    from torch.distributed.elastic.rendezvous.utils import _parse_rendezvous_config
+  File "/opt/conda/lib/python3.7/site-packages/torch/distributed/elastic/rendezvous/__init__.py", line 132, in <module>
+    from .registry import _register_default_handlers
+  File "/opt/conda/lib/python3.7/site-packages/torch/distributed/elastic/rendezvous/registry.py", line 9, in <module>
+    from .dynamic_rendezvous import create_handler
+  File "/opt/conda/lib/python3.7/site-packages/torch/distributed/elastic/rendezvous/dynamic_rendezvous.py", line 878, in <module>
+    class DynamicRendezvousHandler(RendezvousHandler):
+  File "/opt/conda/lib/python3.7/site-packages/torch/distributed/elastic/rendezvous/dynamic_rendezvous.py", line 891, in DynamicRendezvousHandler
+    _keep_alive_timer: Optional[_PeriodicTimer]
+  File "/opt/conda/lib/python3.7/typing.py", line 251, in inner
+    return cached(*args, **kwds)
+  File "/opt/conda/lib/python3.7/typing.py", line 323, in __hash__
+    return hash((self._name,))
+KeyboardInterrupt
