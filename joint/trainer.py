@@ -44,10 +44,6 @@ class QGKGTrainer:
         elif 'bart' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
             self.decode_tokenizer.add_tokens('<cls>')
-        test_text = 'this is a <cls> test'
-        text_inputs = self.tokenizer.encode(test_text)
-        # print(self.tokenizer.decode(text_inputs, skip_special_tokens=True))
-        # print(self.decode_tokenizer.decode(text_inputs, skip_special_tokens=True))
 
         self.tokenizer.save_pretrained(lm_vocab_path)
         print('vocab size: ', self.tokenizer.vocab_size)
@@ -67,29 +63,32 @@ class QGKGTrainer:
 
         self.qg_model = QuestionGenerationModel(generative_lm, lm_name, self.tokenizer)
         self.kg_model = KeyphraseGenerationModel(generative_lm, lm_name, self.tokenizer)
-        # self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
-        # self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
         # self.load_model_from_state_dict()
         self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
 
     def start_train(self, rank):
         self.kg_model.train()
         self.qg_model.train()
+        path = './saved_models/joint/{lm_name}'.format(lm_name=self.lm_name)
+        folder = os.path.exists(path)
+        if not folder:
+            print('creat path')
+            os.makedirs(path)
+
         for epoch in range(0, self.epochs):
-            # self.train_sampler.set_epoch(epoch)
             for step, data in enumerate(tqdm(self.train_dataloader)):
                 real_step = step
                 passage, question, answer = data
                 for iter in range(3):
                     if iter == 0:
                         with torch.no_grad():
-                            encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None, rank)
+                            encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None,
+                                                                                                         rank)
                             _, k_encode = self.kg_model(encoder_input_ids,
                                                         encoder_attention_mask,
                                                         decoder_input_ids=None,
                                                         question_hidden_state=None,
                                                         mode='infer')
-                            # k_encode = k_encode.detach()
                             keyphrase = self._decode_output(k_encode)
 
                     self.qg_optimizer.zero_grad()
@@ -106,7 +105,8 @@ class QGKGTrainer:
                     self.kg_optimizer.zero_grad()
                     encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_kg(
                         passage, answer, rank)
-                    question_attention_mask = torch.ones(decoder_last_hidden_state.shape[0], decoder_last_hidden_state.shape[1]).to(f'cuda:{rank}')
+                    question_attention_mask = torch.ones(decoder_last_hidden_state.shape[0],
+                                                         decoder_last_hidden_state.shape[1]).to(f'cuda:{rank}')
                     kg_loss, k_decoder_out = self.kg_model(
                         encoder_input_ids,
                         encoder_attention_mask,
@@ -127,13 +127,8 @@ class QGKGTrainer:
                         print("Generated answers: ", keyphrase)
                         print("Reference questions: ", question)
                         print("Reference answers: ", answer)
-                path = './saved_models/joint/{lm_name}'.format(lm_name=self.lm_name)
-                # dist.barrier()
+
                 if step > 0 and step % 500 == 0 and rank == 0:
-                    folder = os.path.exists(path)
-                    if not folder:
-                        print('creat path')
-                        os.makedirs(path)
                     torch.save({'state_dict': self.kg_model.state_dict(), 'optimizer': self.kg_optimizer},
                                '{path}/kg_{epoch}_{step}.pth.tar'.format(
                                    path=path, epoch=epoch, step=real_step))
@@ -141,11 +136,11 @@ class QGKGTrainer:
                                '{path}/qg_{epoch}_{step}.pth.tar'.format(
                                    path=path, epoch=epoch, step=real_step))
             torch.save({'state_dict': self.kg_model.state_dict(), 'optimizer': self.kg_optimizer},
-                    '{path}/kg_{epoch}_{step}.pth.tar'.format(
-                        path=path, epoch=epoch, step=1900))
+                       '{path}/kg_{epoch}.pth.tar'.format(
+                           path=path, epoch=epoch))
             torch.save({'state_dict': self.qg_model.state_dict(), 'optimizer': self.qg_optimizer},
-                    '{path}/qg_{epoch}_{step}.pth.tar'.format(
-                        path=path, epoch=epoch, step=1900))
+                       '{path}/qg_{epoch}.pth.tar'.format(
+                           path=path, epoch=epoch))
 
     def load_model_from_ckpt(self):
         kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_0_2900.pth.tar', map_location='cpu')
@@ -158,8 +153,7 @@ class QGKGTrainer:
 
     def load_model_from_state_dict(self):
         kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_2_2900.pth.tar', map_location='cpu')
-        # print(kg_ckpt['state_dict'].keys())
-        self.kg_model.load_state_dict(kg_ckpt['state_dict'])
+        self.kg_model.module.load_state_dict(kg_ckpt['state_dict'])
         # self.kg_optimizer.load_state_dict(kg_ckpt['optimizer'])
 
         qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_2_2900.pth.tar', map_location='cpu')
@@ -177,20 +171,19 @@ class QGKGTrainer:
         val_dataset = QGKGDataset(val_data, self.tokenizer)
         # self.train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True, rank=rank)
         # self.val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=True, rank=rank)
-
         self.train_dataloader = DataLoader(dataset=train_dataset,
                                            batch_size=self.batch_size,
                                            shuffle=False,
-        #                                   num_workers=1,
-        #                                   pin_memory=True,
-                                           drop_last=True,)
+                                           #                                   num_workers=1,
+                                           #                                   pin_memory=True,
+                                           drop_last=True, )
         #                                   sampler=self.train_sampler)
         self.val_dataloader = DataLoader(dataset=val_dataset,
                                          batch_size=self.batch_size,
                                          shuffle=False,
-        #                                 num_workers=1,
-        #                                 pin_memory=True,
-                                         drop_last=True,)
+                                         #                                 num_workers=1,
+                                         #                                 pin_memory=True,
+                                         drop_last=True, )
         #                                 sampler=self.val_sampler)
 
     def _prepare_input_for_kg(self, passage, keyphrase, rank):
@@ -233,7 +226,6 @@ class QGKGTrainer:
         encoder_input_ids = encoder_inputs["input_ids"].cuda(rank, non_blocking=True)
         encoder_attention_mask = encoder_inputs["attention_mask"].cuda(rank, non_blocking=True)
 
-        # question.replace('<sep>', self.tokenizer.cls_token)
         decoder_inputs = self.tokenizer(
             question,
             return_tensors="pt",
@@ -307,8 +299,6 @@ class AGTrainer:
             self.decode_tokenizer.add_tokens('[CLS]')
         print('vocab size: ', self.tokenizer.vocab_size)
         print('special tokens: ', self.tokenizer.all_special_tokens)
-        # self.benchmark_data = BenchmarkLoader().load_data('python_programming.txt')
-        # print(self.benchmark_data)
 
         self.lm_name = lm_name
 
@@ -355,7 +345,8 @@ class AGTrainer:
         train_dataset = QGKGDataset(train_data, self.tokenizer)
         val_dataset = QGKGDataset(val_data, self.tokenizer)
 
-        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
+        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True,
+                                           drop_last=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
     def _prepare_input_for_ag(self, keyphrase, passage, question, answer):
@@ -417,14 +408,13 @@ class AGTrainer:
                     print("Epoch: {}  Step:{}  AG Loss: {}".format(
                         epoch, step, ag_loss.item()))
             torch.save({'state_dict': self.ag_model, 'optimizer': self.ag_optimizer},
-                        '{path}/ag_{epoch}.pth.tar'.format(
-                            path=path, epoch=epoch))
-            # self.validate()
-            # print(self.infer())
+                       '{path}/ag_{epoch}.pth.tar'.format(
+                           path=path, epoch=epoch))
 
 
 class QGKGGenerator:
-    def __init__(self, generative_lm, lm_name, tokenizer, saved_qg_model, saved_kg_model, max_encoder_len, max_decoder_len):
+    def __init__(self, generative_lm, lm_name, tokenizer, saved_qg_model, saved_kg_model, max_encoder_len,
+                 max_decoder_len):
         self.tokenizer = tokenizer.from_pretrained(lm_name)
         self.decode_tokenizer = tokenizer.from_pretrained(lm_name)
         if 't5' in lm_name:
@@ -436,22 +426,14 @@ class QGKGGenerator:
         elif 'bart' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
             self.decode_tokenizer.add_tokens('<cls>')
-        
-        self.qg_model = QuestionGenerationModel(generative_lm, lm_name, self.tokenizer) 
+
+        self.qg_model = QuestionGenerationModel(generative_lm, lm_name, self.tokenizer)
         self.qg_model.load_state_dict(torch.load(saved_qg_model)['state_dict'])
         self.kg_model = KeyphraseGenerationModel(generative_lm, lm_name, self.tokenizer)
         self.kg_model.load_state_dict(torch.load(saved_kg_model)['state_dict'])
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.qg_model.to(self.device)
         self.kg_model.to(self.device)
-        # self.tokenizer = tokenizer.from_pretrained(lm_name)
-        # self.decode_tokenizer = tokenizer.from_pretrained(lm_name)
-        # if 't5' in lm_name:
-        #     self.tokenizer.add_special_tokens({'cls_token': "<cls>"})
-        #     self.decode_tokenizer.add_tokens(['<cls>'])
-        # elif 'prophetnet' in lm_name:
-        #     self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
-        #     self.decode_tokenizer.add_tokens(['[CLS]'])
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 
@@ -474,7 +456,6 @@ class QGKGGenerator:
                                                         max_length=self.max_encoder_len)
             k_input_ids = passage_encode['input_ids'].to(self.device)
             _, g_k_encode = self.kg_model(k_input_ids, mode='infer')
-            # print('gk_encode: ', g_k_encode)
             g_k = self._decode_output(g_k_encode)
             for i in range(3):
                 kp = g_k + ' ' + self.tokenizer.cls_token + ' ' + p
@@ -486,11 +467,8 @@ class QGKGGenerator:
                 kp_input_ids = kp_encode['input_ids'].to(self.device)
                 decoder_last_hidden_state, _, g_q_encode = self.qg_model(kp_input_ids, mode='infer')
                 g_q = self._decode_output(g_q_encode)
-                # print(g_q)
                 _, g_k_encode = self.kg_model(k_input_ids, decoder_input_ids=decoder_last_hidden_state, mode='infer')
-                # print('gk_encode: ', g_k_encode)
                 g_k = self._decode_output(g_k_encode)
-                # print(g_k)
             return g_k, g_q
 
     def generate_batch(self, passages):
@@ -503,13 +481,10 @@ class QGKGGenerator:
                                             truncation=True,
                                             max_length=self.max_encoder_len)
             k_input_ids = passage_encode['input_ids'].to(self.device)
-            # print(k_input_ids.shape)
             _, g_k_encode = self.kg_model(k_input_ids, mode='infer')
-            # print(g_k_encode)
             g_k = self._decode_batch_output(g_k_encode)
             for i in range(3):
                 kp = []
-                # print(g_k)
                 for j in range(len(passages)):
                     kp.append(g_k[j] + ' ' + self.tokenizer.cls_token + ' ' + passages[j])
                 kp_encode = self.tokenizer(kp,
@@ -520,11 +495,8 @@ class QGKGGenerator:
                 kp_input_ids = kp_encode['input_ids'].to(self.device)
                 decoder_last_hidden_state, _, g_q_encode = self.qg_model(kp_input_ids, mode='infer')
                 g_q = self._decode_batch_output(g_q_encode)
-                # print(g_q)
                 _, g_k_encode = self.kg_model(k_input_ids, decoder_input_ids=decoder_last_hidden_state, mode='infer')
-                # print('gk_encode: ', g_k_encode)
                 g_k = self._decode_batch_output(g_k_encode)
-                # print(g_k)
             return g_k, g_q
 
 
