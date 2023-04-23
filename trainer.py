@@ -309,7 +309,7 @@ class Trainer:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_k, g_q = qgkg_generator.generate(p)
-                g_a = ag_generator.generate(p, g_q, g_k)
+                g_a = ag_generator.generate(g_k, p, g_q)
                 references.append(a + ' ' + q)
                 predictions.append(g_a + ' ' + g_q)
                 g_d = d_generator.generate(p, g_q, g_a)
@@ -319,6 +319,8 @@ class Trainer:
                     g_d = d_generator.generate(p, g_q, g_a)
                     d_predictions.append(g_d)
                     d_references.append(d)
+                print(g_q)
+                print(g_a)
                 f.write(p + '\n')
                 f.write(g_q + '\n')
                 f.write(g_a + '\n')
@@ -335,7 +337,9 @@ if __name__ == "__main__":
     trainer = Trainer()
     # trainer.train('qgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     # trainer.train('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
-    trainer.train('qgkgtask', 't5', 't5-base')
+    # trainer.train('qgkgtask', 'bart', 'facebook/bart-base')
+    # trainer.train('qgkgtask', 't5', 't5-base')
+    trainer.train('j_agtask', 'bart', 'facebook/bart-base')
     # trainer.test_pipeline(lm_type='prophetnet',
     #                       lm_name='microsoft/prophetnet-large-uncased',
     #                       saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_3.pth.tar',
@@ -355,17 +359,17 @@ if __name__ == "__main__":
     #                        max_decoder_len=128)
     # trainer.test_joint(lm_type='t5',
     #                    lm_name='t5-base',
-    #                    saved_qg_model='./saved_models/joint/t5-base/',
-    #                    saved_kg_model='./saved_models/joint/t5-base/',
-    #                    saved_ag_model='./saved_model/joint/t5-base/',
+    #                    saved_qg_model='./saved_models/joint/t5-base/qg_4_1500.pth.tar',
+    #                    saved_kg_model='./saved_models/joint/t5-base/kg_4_1500.pth.tar',
+    #                    saved_ag_model='./saved_models/joint/t5-base/ag_2.pth.tar',
     #                    dg_lm_type='t5',
     #                    dg_lm_name='t5-base',
     #                    saved_dg_model='saved_models/distractor/t5-base/1.pth.tar',
     #                    max_encoder_len=256,
     #                    max_decoder_len=128)
-    trainer.test_qgkg(lm_type='t5',
-                      lm_name='t5-base',
-                      saved_qg_model='./saved_models/joint/t5-base/qg_2_2900.pth.tar',
-                      saved_kg_model='./saved_models/joint/t5-base/kg_2_2900.pth.tar',
+    trainer.test_qgkg(lm_type='bart',
+                      lm_name='facebook/bart-base',
+                      saved_qg_model='./saved_models/joint/facebook/bart-base/qg_3_1500.pth.tar',
+                      saved_kg_model='./saved_models/joint/facebook/bart-base/kg_3_1500.pth.tar',
                       max_encoder_len=256,
                       max_decoder_len=128)

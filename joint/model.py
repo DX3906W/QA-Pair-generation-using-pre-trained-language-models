@@ -6,9 +6,10 @@ from transformers import T5ForConditionalGeneration
 
 
 class QuestionGenerationModel(nn.Module):
-    def __init__(self, lm, lm_name):
+    def __init__(self, lm, lm_name, tokenizer):
         super().__init__()
         self.qg_model = lm.from_pretrained(lm_name)
+        self.qg_model.resize_token_embeddings(len(tokenizer))
     
     def _decode(self, logits):
         return torch.argmax(logits, dim=2)
@@ -42,9 +43,10 @@ class QuestionGenerationModel(nn.Module):
 
 
 class KeyphraseGenerationModel(nn.Module):
-    def __init__(self, lm, lm_name):
+    def __init__(self, lm, lm_name, tokenizer):
         super().__init__()
         self.kg_model = lm.from_pretrained(lm_name)
+        self.kg_model.resize_token_embeddings(len(tokenizer))
         self.embedding_layer = self.kg_model.get_input_embeddings()
 
     def _decode(self, logits):
@@ -89,11 +91,12 @@ class KeyphraseGenerationModel(nn.Module):
 
 
 class AnswerGenerationModel(nn.Module):
-    def __init__(self, lm, lm_name):
+    def __init__(self, lm, lm_name, tokenizer):
         super().__init__()
         self.ag_model = lm.from_pretrained(lm_name)
+        self.ag_model.resize_token_embeddings(len(tokenizer))
 
-    def forward(self, encoder_input_ids, encoder_attention_mask, decoder_input_ids, mode='train'):
+    def forward(self, encoder_input_ids, encoder_attention_mask=None, decoder_input_ids=None, mode='train'):
         if mode == 'train':
             res = self.ag_model(input_ids=encoder_input_ids,
                                 attention_mask=encoder_attention_mask,
