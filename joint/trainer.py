@@ -143,20 +143,20 @@ class QGKGTrainer:
                            path=path, epoch=epoch))
 
     def load_model_from_ckpt(self):
-        kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_0_2900.pth.tar', map_location='cpu')
+        kg_ckpt = torch.load('./saved_models/joint/facebook/bart-large/kg_1_4000.pth.tar', map_location='cpu')
         self.kg_model.module.load_state_dict(kg_ckpt['state_dict'].module.state_dict())
         # self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
-        qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_0_1500.pth.tar', map_location='cpu')
+        qg_ckpt = torch.load('./saved_models/joint/facebook/bart-large/qg_1_4000.pth.tar', map_location='cpu')
         self.qg_model.module.load_state_dict(qg_ckpt['state_dict'].module.state_dict())
         # self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
 
     def load_model_from_state_dict(self):
-        kg_ckpt = torch.load('./saved_models/joint/t5-base/kg_2_2900.pth.tar', map_location='cpu')
-        self.kg_model.module.load_state_dict(kg_ckpt['state_dict'])
+        kg_ckpt = torch.load('./saved_models/joint/facebook/bart-large/kg_1_4000.pth.tar', map_location='cpu')
+        self.kg_model.load_state_dict(kg_ckpt['state_dict'])
         # self.kg_optimizer.load_state_dict(kg_ckpt['optimizer'])
 
-        qg_ckpt = torch.load('./saved_models/joint/t5-base/qg_2_2900.pth.tar', map_location='cpu')
+        qg_ckpt = torch.load('./saved_models/joint/facebook/bart-large/qg_1_4000.pth.tar', map_location='cpu')
         self.qg_model.load_state_dict(qg_ckpt['state_dict'])
         # self.qg_optimizer.load_state_dict(qg_ckpt['optimizer'])
 
@@ -259,7 +259,7 @@ class QGKGTrainer:
 
         # self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
         # self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
-        # self.load_model_from_state_dict()
+        self.load_model_from_state_dict()
         self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
         self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
@@ -318,8 +318,8 @@ class AGTrainer:
             generative_lm=generative_lm,
             lm_name=lm_name,
             tokenizer=tokenizer,
-            saved_qg_model='./saved_models/joint/facebook/bart-base/qg_4_1500.pth.tar',
-            saved_kg_model='./saved_models/joint/facebook/bart-base/kg_4_1500.pth.tar',
+            saved_qg_model='./saved_models/joint/facebook/bart-base/qg_4.pth.tar',
+            saved_kg_model='./saved_models/joint/facebook/bart-base/kg_4.pth.tar',
             max_encoder_len=max_encoder_len,
             max_decoder_len=max_decoder_len)
 
