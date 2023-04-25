@@ -58,7 +58,7 @@ class Trainer:
             'lm_name': self.lm_name,
             'tokenizer': self.tokenizer,
             'lambda_p': 0,
-            'batch_size': 4,
+            'batch_size': 12,
             'epochs': 5,
             'lr': 1e-5,
             'vocab_size': 50265,
@@ -337,7 +337,7 @@ if __name__ == "__main__":
     trainer = Trainer()
     # trainer.train('qgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     # trainer.train('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
-    trainer.train('qgkgtask', 'bart', 'facebook/bart-large')
+    # trainer.train('qgkgtask', 'bart', 'facebook/bart-large')
     # trainer.train('qgkgtask', 't5', 't5-base')
     trainer.train('j_agtask', 'bart', 'facebook/bart-large')
     # trainer.test_pipeline(lm_type='prophetnet',

@@ -297,6 +297,9 @@ class AGTrainer:
         elif 'prophetnet' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
             self.decode_tokenizer.add_tokens('[CLS]')
+        elif 'bart' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
+            self.decode_tokenizer.add_tokens('<cls>')
         print('vocab size: ', self.tokenizer.vocab_size)
         print('special tokens: ', self.tokenizer.all_special_tokens)
 
@@ -318,8 +321,8 @@ class AGTrainer:
             generative_lm=generative_lm,
             lm_name=lm_name,
             tokenizer=tokenizer,
-            saved_qg_model='./saved_models/joint/facebook/bart-base/qg_4.pth.tar',
-            saved_kg_model='./saved_models/joint/facebook/bart-base/kg_4.pth.tar',
+            saved_qg_model='./saved_models/joint/facebook/bart-large/qg_0.pth.tar',
+            saved_kg_model='./saved_models/joint/facebook/bart-large/kg_0.pth.tar',
             max_encoder_len=max_encoder_len,
             max_decoder_len=max_decoder_len)
 
