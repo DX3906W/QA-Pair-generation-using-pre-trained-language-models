@@ -37,8 +37,6 @@ class AGQGTrainer:
         print('vocab size: ', self.tokenizer.vocab_size)
         print('special tokens: ', self.tokenizer.all_special_tokens)
         self.generation_task = generation_task
-        self.benchmark_data = BenchmarkLoader().load_data('python_programming.json')
-        # print(self.benchmark_data)
 
         self.lm_name = lm_name
 
@@ -114,11 +112,10 @@ class AGQGTrainer:
             torch.save({'state_dict': self.model, 'optimizer': self.optimizer},
                        '{path}/{generation_task}_{epoch}.pth.tar'.format(
                            path=path, generation_task=self.generation_task, epoch=epoch))
-            # self.validate()
-            # print(self.infer())
 
     def validate(self):
         self.model.eval()
+        loss = 0
         with torch.no_grad():
             for step, data in enumerate(self.val_dataloader):
                 batch = [d.to(self.device) for d in data]
@@ -126,38 +123,10 @@ class AGQGTrainer:
                 outputs = self.model(input_ids=input_ids,
                                      attention_mask=attention_mask,
                                      labels=label_ids,)
-                loss = outputs[0]
+                step_loss = outputs[0]
+                loss += step_loss.item()
                 if step % 10 == 0:
-                    print("Validation Step:{}  Loss:{}".format(step, loss.item()))
-
-                if step % 50 == 0:
-                    input_ids = self.tokenizer(self.test_simple).input_ids
-                    g_p = self.model.generate(input_ids)
-                    print(self.tokenizer.decode(g_p.squeeze().tolist(), skip_special_tokens=True))
-
-    def infer(self, save_predictions=False):
-        self.model.eval()
-        predictions = []
-        references = []
-        for passage, answer, question in zip(self.benchmark_data['passage'], self.benchmark_data['answer'], self.benchmark_data['question']):
-            if self.generation_task == 'answer':
-                inputs = passage
-                references.append(answer)
-            else:
-                inputs = passage + ' ' + self.tokenizer.sep_token + ' ' + answer
-                references.append(question)
-            encode_inputs = self.tokenizer.encode_plus(inputs,
-                                                       return_tensors="pt",
-                                                       padding='max_length',
-                                                       truncation=True,
-                                                       max_length=self.max_encoder_len)
-            with torch.no_grad():
-                input_ids, attention_mask = encode_inputs['input_ids'], encode_inputs['attention_mask']
-                input_ids = input_ids.to(self.device)
-                outputs = self.model.generate(input_ids)
-                decoded_outputs = self.tokenizer.decode(outputs.squeeze().tolist(), skip_special_tokens=True)
-                predictions.append(decoded_outputs)
-        return evaluate_metrics(predictions, references)
+                    print("Validation Step:{}  Loss:{}".format(step, loss / step))
 
 
 class PipelineGenerator:

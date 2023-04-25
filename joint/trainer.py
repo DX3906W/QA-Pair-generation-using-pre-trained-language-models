@@ -6,9 +6,8 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from transformers import AdamW
 from .model import QuestionGenerationModel, KeyphraseGenerationModel, AnswerGenerationModel
-from data_loader import SQuADLoaderForJoint, BenchmarkLoader, RACELoader
-from .data_processor import AGDataset, QGKGDataset
-from utils import evaluate_metrics
+from data_loader import SQuADLoaderForJoint, RACELoader
+from .data_processor import JointDataset
 
 
 class QGKGTrainer:
@@ -48,7 +47,6 @@ class QGKGTrainer:
         self.tokenizer.save_pretrained(lm_vocab_path)
         print('vocab size: ', self.tokenizer.vocab_size)
         print('special tokens: ', self.tokenizer.all_special_tokens)
-        self.benchmark_data = BenchmarkLoader().load_data('python_programming.json')
         self.lm_name = lm_name
 
         self.batch_size = batch_size
@@ -63,7 +61,13 @@ class QGKGTrainer:
 
         self.qg_model = QuestionGenerationModel(generative_lm, lm_name, self.tokenizer)
         self.kg_model = KeyphraseGenerationModel(generative_lm, lm_name, self.tokenizer)
-        # self.load_model_from_state_dict()
+        self.load_data()
+        self.qg_model.cuda(0)
+        self.kg_model.cuda(0)
+        self.load_model_from_state_dict()
+        self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
+        self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
+
         self.test_sample = 'A modern computer can be defined as a machine that stores and manipulates information under the control of a  changeable program.'
 
     def start_train(self, rank):
@@ -160,15 +164,15 @@ class QGKGTrainer:
         self.qg_model.load_state_dict(qg_ckpt['state_dict'])
         # self.qg_optimizer.load_state_dict(qg_ckpt['optimizer'])
 
-    def load_data(self, rank):
+    def load_data(self):
         if 'processed_squad' in self.dataset:
             train_data, val_data = SQuADLoaderForJoint().get_data()
         elif 'race' in self.dataset:
             train_data, val_data = RACELoader().get_data()
         else:
             train_data, val_data = None, None
-        train_dataset = QGKGDataset(train_data, self.tokenizer)
-        val_dataset = QGKGDataset(val_data, self.tokenizer)
+        train_dataset = JointDataset(train_data, self.tokenizer)
+        val_dataset = JointDataset(val_data, self.tokenizer)
         # self.train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True, rank=rank)
         # self.val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=True, rank=rank)
         self.train_dataloader = DataLoader(dataset=train_dataset,
@@ -251,19 +255,58 @@ class QGKGTrainer:
         #                         rank=rank)
         # torch.cuda.set_device(local_rank)
 
-        self.load_data(0)
         # print('local rank', local_rank)
         # self.load_model_from_state_dict(local_rank)
-        self.qg_model.cuda(0)
-        self.kg_model.cuda(0)
 
         # self.qg_model = torch.nn.parallel.DistributedDataParallel(self.qg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
         # self.kg_model = torch.nn.parallel.DistributedDataParallel(self.kg_model, device_ids=[local_rank], output_device=torch.device(f'cuda:{local_rank}'))
-        self.load_model_from_state_dict()
-        self.qg_optimizer = AdamW(params=self.qg_model.parameters(), lr=self.lr)
-        self.kg_optimizer = AdamW(params=self.kg_model.parameters(), lr=self.lr)
 
         self.start_train(0)
+
+    def validate(self, rank=0):
+        self.kg_model.eval()
+        self.qg_model.eval()
+        kg_loss_sum = 0
+        qg_loss_sum = 0
+        for step, data in enumerate(tqdm(self.val_dataloader)):
+            passage, question, answer = data
+            for iter in range(3):
+                if iter == 0:
+                    with torch.no_grad():
+                        encoder_input_ids, encoder_attention_mask, _, _ = self._prepare_input_for_kg(passage, None,
+                                                                                                     rank)
+                        _, k_encode = self.kg_model(encoder_input_ids,
+                                                    encoder_attention_mask,
+                                                    decoder_input_ids=None,
+                                                    question_hidden_state=None,
+                                                    mode='infer')
+                        keyphrase = self._decode_output(k_encode)
+
+                encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_qg(
+                    keyphrase, passage, question, rank)
+                decoder_last_hidden_state, qg_loss, q_decoder_out = self.qg_model(
+                    encoder_input_ids,
+                    encoder_attention_mask,
+                    decoder_input_ids,
+                    mode='train')
+
+                encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_kg(
+                    passage, answer, rank)
+                question_attention_mask = torch.ones(decoder_last_hidden_state.shape[0],
+                                                     decoder_last_hidden_state.shape[1]).to(f'cuda:{rank}')
+                kg_loss, k_decoder_out = self.kg_model(
+                    encoder_input_ids,
+                    encoder_attention_mask,
+                    decoder_input_ids,
+                    decoder_last_hidden_state.detach(),
+                    question_attention_mask,
+                    mode='train')
+                keyphrase = self._decode_output(k_decoder_out)
+                kg_loss_sum += kg_loss.item()
+                qg_loss_sum += qg_loss.item()
+                if step % 10 == 0 and iter == 2:
+                    print(" Step:{}  KG Loss: {}   QG Loss: {}".format(
+                        step, kg_loss_sum / step, qg_loss_sum / step))
 
 
 class AGTrainer:
@@ -345,8 +388,8 @@ class AGTrainer:
             train_data, val_data = RACELoader().get_data()
         else:
             train_data, val_data = None, None
-        train_dataset = QGKGDataset(train_data, self.tokenizer)
-        val_dataset = QGKGDataset(val_data, self.tokenizer)
+        train_dataset = JointDataset(train_data, self.tokenizer)
+        val_dataset = JointDataset(val_data, self.tokenizer)
 
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True,
                                            drop_last=True)
@@ -413,6 +456,24 @@ class AGTrainer:
             torch.save({'state_dict': self.ag_model, 'optimizer': self.ag_optimizer},
                        '{path}/ag_{epoch}.pth.tar'.format(
                            path=path, epoch=epoch))
+
+    def validate(self):
+        self.ag_model.eval()
+        loss = 0
+        for step, data in enumerate(tqdm(self.val_dataloader)):
+            passage, refer_question, answer = data
+            self.ag_optimizer.zero_grad()
+            keyphrase, question = self.qgkg_generator.generate_batch(passage)
+            encoder_input_ids, encoder_attention_mask, decoder_input_ids, _ = self._prepare_input_for_ag(
+                keyphrase, passage, refer_question, answer)
+            ag_loss, decoder_out = self.ag_model(
+                encoder_input_ids,
+                encoder_attention_mask,
+                decoder_input_ids,
+                mode='train')
+            loss += ag_loss.item()
+            if step % 10 == 0:
+                print("Step:{}  AG Loss: {}".format(step, loss / step))
 
 
 class QGKGGenerator:
@@ -516,6 +577,9 @@ class AGGenerator:
         elif 'prophetnet' in lm_name:
             self.tokenizer.add_special_tokens({'cls_token': '[CLS]'})
             self.decode_tokenizer.add_tokens('[CLS]')
+        elif 'bart' in lm_name:
+            self.tokenizer.add_special_tokens({'cls_token': '<cls>'})
+            self.decode_tokenizer.add_tokens('<cls>')
         self.max_encoder_len = max_encoder_len
         self.max_decoder_len = max_decoder_len
 

@@ -12,7 +12,7 @@ from transformers import T5Model, ProphetNetModel, BartModel
 from transformers import T5Config, ProphetNetConfig, BartConfig
 from transformers import T5ForConditionalGeneration, ProphetNetForConditionalGeneration, BartForConditionalGeneration
 from transformers import T5Tokenizer, ProphetNetTokenizer, BartTokenizer
-from utils import evaluate_metrics
+from utils import evaluate_metrics, analyze_joint_output
 
 
 class Trainer:
@@ -46,7 +46,7 @@ class Trainer:
             'bart': BartTokenizer
         }
 
-    def train(self, task_name, lm_type, lm_name):
+    def _prepare_train(self, task_name, lm_type, lm_name):
         self.lm = self.lms.get(lm_type)
         self.generative_lm = self.generative_lms.get(lm_type)
         self.lm_name = lm_name
@@ -76,13 +76,23 @@ class Trainer:
             task_config['generation_task'] = 'question'
         else:
             task_config['generation_task'] = 'answer'
+        return task_config
 
+    def train(self, task_name, lm_type, lm_name):
+        task_config = self._prepare_train(task_name, lm_type, lm_name)
         self.task = self.task_names.get(task_name)(**task_config)
-
         if self.task is None:
             return
 
         self.task.train()
+
+    def validate(self, task_name, lm_type, lm_name):
+        task_config = self._prepare_train(task_name, lm_type, lm_name)
+        self.task = self.task_names.get(task_name)(**task_config)
+        if self.task is None:
+            return
+
+        self.task.validate()
 
     def analyze_file_name(self, file_name):
         return file_name.split('/')[-1].split('.')[0]
@@ -123,9 +133,10 @@ class Trainer:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_a, g_q = generator.generate(p)
-                references.append(a + ' ' + q)
-                predictions.append(g_a + ' ' + g_q)
-
+                references.append(q)
+                references.append(a)
+                predictions.append(g_q)
+                predictions.append(g_a)
                 for _ in range(3):
                     g_d = d_generator.generate(p, g_q, g_a)
                     d_predictions.append(g_d)
@@ -177,10 +188,10 @@ class Trainer:
             for p, a, q, d in zip(benchmark_data['passage'], benchmark_data['answer'],
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_q, g_a = generator.generate(passage=p)
-                # print(g_q)
-                # print(g_a)
-                references.append(a + ' ' + q)
-                predictions.append(g_a + ' ' + g_q)
+                references.append(q)
+                references.append(a)
+                predictions.append(g_q)
+                predictions.append(g_a)
 
                 g_d = d_generator.generate(p, g_q, g_a)
                 d_predictions.append(g_d)
@@ -295,6 +306,11 @@ class Trainer:
             'max_encoder_len': max_encoder_len,
             'max_decoder_len': max_decoder_len,
         }
+        separator_dict = {
+            'bart': '<cls>',
+            't5': '<cls>',
+            'prophetnet': '[CLS]'
+        }
         d_generator = DistractorGenerator(**dg_param_dict)
 
         benchmark_data = BenchmarkLoader().load_data('python_programming.json')
@@ -310,8 +326,11 @@ class Trainer:
                                   benchmark_data['question'], benchmark_data['distractor']):
                 g_k, g_q = qgkg_generator.generate(p)
                 g_a = ag_generator.generate(g_k, p, g_q)
-                references.append(a + ' ' + q)
-                predictions.append(g_a + ' ' + g_q)
+                g_q_list, g_a_list = analyze_joint_output(g_q, g_a, separator_dict.get(lm_type))
+                references.extend(q * len(g_q_list))
+                references.extend(a * len(g_a_list))
+                predictions.extend(g_q)
+                predictions.extend(g_a)
                 g_d = d_generator.generate(p, g_q, g_a)
                 d_predictions.append(g_d)
                 d_references.append(d)
@@ -339,7 +358,17 @@ if __name__ == "__main__":
     # trainer.train('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
     # trainer.train('qgkgtask', 'bart', 'facebook/bart-large')
     # trainer.train('qgkgtask', 't5', 't5-base')
-    trainer.train('j_agtask', 'bart', 'facebook/bart-large')
+    # trainer.train('j_agtask', 'bart', 'facebook/bart-large')
+    trainer.validate('qgkgtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
+    # trainer.validate('qgkgtask', 't5', 't5-base')
+    # trainer.validate('qgkgtask', 'bart', 'facebook/bart-base')
+    # trainer.validate('qgkgtask', 'bart', 'facebook/bart-large')
+
+    # trainer.validate('j_agtask', 'prophetnet', 'microsoft/prophetnet-large-uncased')
+    # trainer.validate('j_agtask', 't5', 't5-base')
+    # trainer.validate('j_agtask', 'bart', 'facebook/bart-base')
+    # trainer.validate('v', 'bart', 'facebook/bart-large')
+
     # trainer.test_pipeline(lm_type='prophetnet',
     #                       lm_name='microsoft/prophetnet-large-uncased',
     #                       saved_qg_model='saved_models/pipeline/microsoft/prophetnet-large-uncased/question_3.pth.tar',

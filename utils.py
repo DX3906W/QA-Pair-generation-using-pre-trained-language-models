@@ -30,3 +30,18 @@ def evaluate_metrics(predictions, references):
     meteor_score = meteor(predictions, references)
     return {'blue_1': blue_score_1, 'blue_2': blue_score_2, 'blue_3': blue_score_3, 'blue_4': blue_score_4,
             'rouge': rouge_score, 'meteor': meteor_score}
+
+
+def analyze_joint_output(questions, answers, separator):
+    # analyze the output of the joint model
+    question_list = questions.split(separator)
+    answer_list = answers.split(separator)
+
+    if not question_list[-1].endswith('?'):
+        question_list = question_list[:-1]
+    min_len = min(len(question_list), len(answer_list))
+    question_list = question_list[:min_len]
+    answer_list = answer_list[:min_len]
+    assert len(question_list) == len(answer_list)
+
+    return question_list, answer_list
