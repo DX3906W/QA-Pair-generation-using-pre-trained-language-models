@@ -1,3 +1,8 @@
+# @Time    : 2023/6/8 16:08
+# @Author  : Jintao Ling
+# @Email: lingjintao.su@gmail.com
+
+
 from transformers import BartModel, BartTokenizer
 from transformers import T5Model, T5Tokenizer
 from transformers import ProphetNetModel, ProphetNetTokenizer

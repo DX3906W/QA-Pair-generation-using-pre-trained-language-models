@@ -1,4 +1,8 @@
-import argparse
+# @Time    : 2023/6/8 16:08
+# @Author  : Jintao Ling
+# @Email: lingjintao.su@gmail.com
+
+
 import os
 import torch
 
@@ -331,9 +335,6 @@ class Trainer:
                 references.extend(a * len(g_a_list))
                 predictions.extend(g_q)
                 predictions.extend(g_a)
-                g_d = d_generator.generate(p, g_q, g_a)
-                d_predictions.append(g_d)
-                d_references.append(d)
                 for _ in range(3):
                     g_d = d_generator.generate(p, g_q, g_a)
                     d_predictions.append(g_d)
