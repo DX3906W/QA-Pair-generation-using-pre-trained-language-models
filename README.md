@@ -1,9 +1,10 @@
-# QA-Pair-generation-using-pre-trained-language-models
+# Automatic question-answer pairs generation using NLP pre-trained language models   -- How do they perform for educational purposes?
+
 ## 1. Introduction
 Three different approaches were implemented and fine-tuned on the **SQuAD dataset** to generate QA pairs: 
-* multi-task
-* pipeline
-* joint model 
+* Multi-task
+* Pipeline
+* Joint model 
 
 The **distractors** are essential for multi-choice questions, one **T5-based distractor generation model** is fine-tuned with the **DG-RACE dataset**. 
 
@@ -125,15 +126,15 @@ if __name__ == "__main__":
 
 ```
 
-## Results
-### Automatic Evaluation
+## 4. Results
+### 4.1 Automatic Evaluation
 ![Results of Automatic Evaluation Metrics for Python Programming](./results/PythonProgramming.png)
 
 ![Results of Automatic Evaluation Metrics for Big Data](./results/BigData.png)
 
 ![Results of Automatic Evaluation Metrics for Enterprise Modelling](./results/EnterpriseModelling.png)
 
-### Expert Evaluation
+### 4.2 Expert Evaluation
 ![Themes](./results/Themes.png)
 
 ![Heatmap](./results/Heatmap.png)
