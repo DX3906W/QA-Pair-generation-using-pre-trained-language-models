@@ -127,16 +127,16 @@ if __name__ == "__main__":
 
 ## Results
 ### Automatic Evaluation
-![Results of Automatic Evaluation Metrics for Python Programming](results/Python Programming.png)
+![Results of Automatic Evaluation Metrics for Python Programming](./results/Python Programming.png)
 
-![Results of Automatic Evaluation Metrics for Big Data](results/Big Data.png)
+![Results of Automatic Evaluation Metrics for Big Data](./results/Big Data.png)
 
-![Results of Automatic Evaluation Metrics for Enterprise Modelling](results/Enterprise Modelling.png)
+![Results of Automatic Evaluation Metrics for Enterprise Modelling](./results/Enterprise Modelling.png)
 
 ### Expert Evaluation
-![Themes](results/Themes.png)
+![Themes](./results/Themes.png)
 
-![Heatmap](results/Heatmap.png)
+![Heatmap](./results/Heatmap.png)
 
 ****
 ### *Author Information*
