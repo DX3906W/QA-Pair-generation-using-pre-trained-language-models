@@ -61,7 +61,7 @@ The **evaluation** stage includes two separate methods:
 
 ## 3. Code running
 In **trainer.py**
-* **Training task config**
+* **Trainer of tasks**
 ```
     def __init__(self):
         self.task_names = {
@@ -106,7 +106,7 @@ In **trainer.py**
         return task_config
 ```
 
-* **Training task and language models**
+* **Run training task**
 ```
 if __name__ == "__main__":
     trainer = Trainer()
