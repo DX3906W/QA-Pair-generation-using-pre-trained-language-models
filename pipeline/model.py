@@ -5,7 +5,6 @@
 
 import torch
 
-from config import Config
 from utils import *
 import torch.nn as nn
 
