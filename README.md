@@ -4,7 +4,7 @@ How do they perform for educational purposes?
 --
 ### *Author Information*
 Author: Jintao Ling, EMAIL ME: *lingjintao.su@gmail.com* <br />
-Supervisor: Muhammad Afzaal, GitHub: [HERE](https://github.com/muhammadafzaal) <br />
+Supervisor: Muhammad Afzaal, PHD, EMAIL ME: *muhammad.afzaal@dsv.su.se*  GitHub: [HERE](https://github.com/muhammadafzaal) <br />
 Organization: Stockholm University
 ## 1. Introduction
 Three different approaches were implemented and fine-tuned on the **SQuAD dataset** to generate QA pairs: 
