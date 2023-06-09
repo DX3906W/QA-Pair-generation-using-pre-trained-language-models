@@ -54,7 +54,7 @@ The **evaluation** stage includes two separate methods:
 
 ## 3. Code running
 In **trainer.py**
-* Training task config
+* **Training task config**
 ```
     def __init__(self):
         self.task_names = {
@@ -67,7 +67,7 @@ In **trainer.py**
         }
 ```
 
-* Training parameter setting
+* **Training parameter setting**
 ```
     def _prepare_train(self, task_name, lm_type, lm_name):
         self.lm = self.lms.get(lm_type)
@@ -99,7 +99,7 @@ In **trainer.py**
         return task_config
 ```
 
-* Training task and language models
+* **Training task and language models**
 ```
 if __name__ == "__main__":
     trainer = Trainer()
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     trainer.validate(TASK_NAME, LANGUAGE_MODEL_TYPE, LANGUAGE_MODEL_NAME)
 ```
 
-* Inference
+* **Inference**
 ```
 if __name__ == "__main__":
     trainer = Trainer()
