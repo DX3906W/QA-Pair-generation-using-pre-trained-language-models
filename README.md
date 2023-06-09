@@ -2,7 +2,10 @@ Automatic question-answer pairs generation using NLP pre-trained language models
 ==
 How do they perform for educational purposes?
 --
-
+### *Author Information*
+Author: Jintao Ling, EMAIL ME: *lingjintao.su@gmail.com* <br />
+Supervisor: Muhammad Afzaal, GitHub: [HERE](https://github.com/muhammadafzaal) <br />
+Organization: Stockholm University
 ## 1. Introduction
 Three different approaches were implemented and fine-tuned on the **SQuAD dataset** to generate QA pairs: 
 * Multi-task
@@ -138,12 +141,4 @@ if __name__ == "__main__":
 ![Results of Automatic Evaluation Metrics for Enterprise Modelling](./results/EnterpriseModelling.png)
 
 ### 4.2 Expert Evaluation
-![Themes](./results/Themes.png)
-
-![Heatmap](./results/Heatmap.png)
-
-****
-### *Author Information*
-Author: Jintao Ling, EMAIL ME: *lingjintao.su@gmail.com* <br />
-Supervisor: Muhammad Afzaal, GitHub: [HERE](https://github.com/muhammadafzaal) <br />
-Organization: Stockholm University
+......
