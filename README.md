@@ -1,4 +1,7 @@
-# Automatic question-answer pairs generation using NLP pre-trained language models   -- How do they perform for educational purposes?
+Automatic question-answer pairs generation using NLP pre-trained language models
+==
+How do they perform for educational purposes?
+--
 
 ## 1. Introduction
 Three different approaches were implemented and fine-tuned on the **SQuAD dataset** to generate QA pairs: 
